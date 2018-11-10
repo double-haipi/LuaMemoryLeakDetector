@@ -26,16 +26,20 @@ public class ReferenceCheckWindow : EditorWindow
     private Vector2 _summaryMessageScrollPosition = Vector2.zero;
     private Vector2 _detailMessageScrollPosition = Vector2.zero;
 
+    private bool _needInitScrollViewArea = false;
     private float _summaryMessageScrollViewHeight;
     private float _detailMessageScrollViewHeight;
 
-    private string _storeKey = "SUMMARY_MESSAGE_SCROLL_VIEW_HEIGHT";
 
     private Rect _segmentingLineRect;
     private bool _segmentingLineChange = false;
+    private float _segmentingLinePositonToWindowHeightRatio;
+    private string _segmentingLineRatioKey = "SEGMENTING_LINE_RATIO";
 
+    private Texture2D _segmentingLineTexture;
     private Rect _cursorRect;
     private int _cursorRectWidth = 10;
+    private float _lastWindowHeight;
     #endregion
 
     [MenuItem("PandoraTools/ReferenceChecker")]
@@ -43,16 +47,23 @@ public class ReferenceCheckWindow : EditorWindow
     {
         GetWindow<ReferenceCheckWindow>(false, "ReferenceChecker", true);
     }
-
-    private void OnEnable()
+    private void OnFocus()
     {
-        InitMessageScrollViewArea();
+        //每次获取到焦点时初始化一次
+        _needInitScrollViewArea = true;
+    }
+
+    private void OnLostFocus()
+    {
+        //记录segmentingLineRatio
+        EditorPrefs.SetFloat(_segmentingLineRatioKey, _segmentingLinePositonToWindowHeightRatio);
     }
 
     public void OnGUI()
     {
         EditorGUILayout.BeginVertical();
         //DrawHeadTabs();
+        InitMessageScrollViewArea();
         DrawButtons();
         DrawSegmentingLine();
         ResizeMessageScrollViewArea();
@@ -62,7 +73,7 @@ public class ReferenceCheckWindow : EditorWindow
 
         //DrawButtons();
         EditorGUILayout.EndVertical();
-        Repaint();
+        //Repaint();
     }
 
     private void DrawHeadTabs()
@@ -119,13 +130,17 @@ public class ReferenceCheckWindow : EditorWindow
 
     private void InitMessageScrollViewArea()
     {
+        if (_needInitScrollViewArea == false)
+        {
+            return;
+        }
         _summaryMessageScrollViewHeight = Screen.height / 2;
-        //_detailMessageScrollViewHeight = Screen.height / 2 + _buttonHeight + _defaultPadding;
+        _detailMessageScrollViewHeight = Screen.height / 2 + _buttonHeight + _defaultPadding;
 
-        _segmentingLineRect = new Rect(0, _summaryMessageScrollViewHeight + _buttonHeight + _defaultPadding, Screen.width * 2, 1f);
-        //_detailMessageScrollViewHeight = Screen.height - 
+        _segmentingLineRect = new Rect(0, _summaryMessageScrollViewHeight + _buttonHeight + _defaultPadding, Screen.width, 1f);
 
         _cursorRect = new Rect(0, _segmentingLineRect.y - _cursorRectWidth / 2, Screen.width, 10f);
+        _needInitScrollViewArea = false;
     }
 
     private void ResizeMessageScrollViewArea()
@@ -185,19 +200,22 @@ public class ReferenceCheckWindow : EditorWindow
 
     private void DrawSegmentingLine()
     {
-        Texture2D tex = new Texture2D(1, 1);
-        tex.hideFlags = HideFlags.DontSave;
-
-        for (int i = 0; i < 1; i++)
+        if (_segmentingLineTexture == null)
         {
-            for (int j = 0; j < 1; j++)
+            _segmentingLineTexture = new Texture2D(1, 1);
+            _segmentingLineTexture.hideFlags = HideFlags.DontSave;
+            for (int i = 0; i < 1; i++)
             {
-                tex.SetPixel(i, j, Color.black);
+                for (int j = 0; j < 1; j++)
+                {
+                    _segmentingLineTexture.SetPixel(i, j, Color.black);
+                }
             }
+            _segmentingLineTexture.Apply();
+            _segmentingLineTexture.filterMode = FilterMode.Point;
         }
-        tex.Apply();
-        tex.filterMode = FilterMode.Point;
-        GUI.DrawTexture(_segmentingLineRect, tex);
+
+        GUI.DrawTexture(_segmentingLineRect, _segmentingLineTexture);
         EditorGUIUtility.AddCursorRect(_cursorRect, MouseCursor.ResizeVertical);
     }
 
