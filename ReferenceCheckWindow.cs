@@ -3,6 +3,8 @@
 //单条记录头部加图标，加背景图，可点击看详情
 //底部按钮
 
+
+
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -32,7 +34,7 @@ public class ReferenceCheckWindow : EditorWindow
 
 
     private Rect _segmentingLineRect;
-    private bool _segmentingLineChange = false;
+    private bool _segmentingLineMove = false;
     private float _segmentingLinePositonToWindowHeightRatio;
     private string _segmentingLineRatioKey = "SEGMENTING_LINE_RATIO";
 
@@ -40,6 +42,7 @@ public class ReferenceCheckWindow : EditorWindow
     private Rect _cursorRect;
     private int _cursorRectWidth = 10;
     private float _lastWindowHeight;
+    private bool _windowResize = false;
     #endregion
 
     [MenuItem("PandoraTools/ReferenceChecker")]
@@ -66,7 +69,10 @@ public class ReferenceCheckWindow : EditorWindow
         InitMessageScrollViewArea();
         DrawButtons();
         DrawSegmentingLine();
-        ResizeMessageScrollViewArea();
+        OnMouseEvent();
+        OnScreenHeightResize();
+        RefreshMessageScrollViewArea();
+
         DrawSummaryMessageArea();
 
         DrawDetailMessageArea();
@@ -134,23 +140,24 @@ public class ReferenceCheckWindow : EditorWindow
         {
             return;
         }
-        _summaryMessageScrollViewHeight = Screen.height / 2;
-        _detailMessageScrollViewHeight = Screen.height / 2 + _buttonHeight + _defaultPadding;
+        else
+        {
+            _segmentingLinePositonToWindowHeightRatio = EditorPrefs.GetFloat(_segmentingLineRatioKey, 0.5f);
 
-        _segmentingLineRect = new Rect(0, _summaryMessageScrollViewHeight + _buttonHeight + _defaultPadding, Screen.width, 1f);
+            SetMessageScrollViewArea();
+            _needInitScrollViewArea = false;
 
-        _cursorRect = new Rect(0, _segmentingLineRect.y - _cursorRectWidth / 2, Screen.width, 10f);
-        _needInitScrollViewArea = false;
+        }
     }
 
     private void ResizeMessageScrollViewArea()
     {
         if (Event.current.type == EventType.mouseDown && _cursorRect.Contains(Event.current.mousePosition))
         {
-            _segmentingLineChange = true;
+            _segmentingLineMove = true;
         }
 
-        if (_segmentingLineChange == true)
+        if (_segmentingLineMove == true)
         {
             _summaryMessageScrollViewHeight = Event.current.mousePosition.y - _buttonHeight - _defaultPadding;
             _detailMessageScrollViewHeight = Screen.height - Event.current.mousePosition.y - _defaultPadding;
@@ -163,7 +170,7 @@ public class ReferenceCheckWindow : EditorWindow
 
         if (Event.current.type == EventType.MouseUp)
         {
-            _segmentingLineChange = false;
+            _segmentingLineMove = false;
         }
 
 
@@ -218,6 +225,84 @@ public class ReferenceCheckWindow : EditorWindow
         GUI.DrawTexture(_segmentingLineRect, _segmentingLineTexture);
         EditorGUIUtility.AddCursorRect(_cursorRect, MouseCursor.ResizeVertical);
     }
+
+    private void OnMouseEvent()
+    {
+        if (Event.current.type == EventType.MouseDrag && _cursorRect.Contains(Event.current.mousePosition))
+        {
+            _segmentingLineMove = true;
+        }
+
+        if (Event.current.rawType == EventType.MouseUp)
+        {
+            _segmentingLineMove = false;
+        }
+    }
+
+
+    private void OnScreenHeightResize()
+    {
+        if (_lastWindowHeight != Screen.height)
+        {
+            _lastWindowHeight = Screen.height;
+            _windowResize = true;
+        }
+        else
+        {
+            _windowResize = false;
+        }
+    }
+
+    private void RefreshMessageScrollViewArea()
+    {
+        //只有分割线移动时计算radio,窗口变动不计算
+        if (_segmentingLineMove == true)
+        {
+            Debug.LogWarning(string.Format("lineMove = {0},windowResize = {1}", _segmentingLineMove, _windowResize));
+            _segmentingLinePositonToWindowHeightRatio = Event.current.mousePosition.y / Screen.height;
+            Debug.LogError(string.Format("ratio:{0}", _segmentingLinePositonToWindowHeightRatio.ToString()));
+
+
+
+        }
+        if (_segmentingLineMove == true || _windowResize == true)
+        {
+
+            SetMessageScrollViewArea();
+
+
+            Repaint();
+        }
+
+    }
+
+    private void SetMessageScrollViewArea()
+    {
+        float screenHeight = Screen.height;
+        float ySegmentingLinePosition = screenHeight * _segmentingLinePositonToWindowHeightRatio;
+
+        _summaryMessageScrollViewHeight = ySegmentingLinePosition - _buttonHeight - _defaultPadding;
+        _detailMessageScrollViewHeight = screenHeight - ySegmentingLinePosition - _defaultPadding;
+
+        if (_segmentingLineRect == null)
+        {
+            _segmentingLineRect = new Rect(0, ySegmentingLinePosition, Screen.width, 1f);
+        }
+        else
+        {
+            _segmentingLineRect.Set(0, ySegmentingLinePosition, Screen.width, 1f);
+        }
+
+        if (_cursorRect == null)
+        {
+            _cursorRect = new Rect(0, _segmentingLineRect.y - _cursorRectWidth / 2, Screen.width, _cursorRectWidth);
+        }
+        else
+        {
+            _cursorRect.Set(0, _segmentingLineRect.y - _cursorRectWidth / 2, Screen.width, _cursorRectWidth);
+        }
+    }
+
 
 }
 
