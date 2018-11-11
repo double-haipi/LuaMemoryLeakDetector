@@ -20,10 +20,12 @@ public class ReferenceCheckWindow : EditorWindow
     }
 
     #region 参数
+    private string _searchFilter;
     private int _selectedTab = 0;//选中的tab index
     private List<string> _tabNames = new List<string>();
-    private float _buttonHeight = 30f;
-    private float _defaultPadding = 2f;
+    private int _buttonHeight = 30;
+    private int _defaultPadding = 2;
+    private int _messageLineHeight = 30;
 
     private Vector2 _summaryMessageScrollPosition = Vector2.zero;
     private Vector2 _detailMessageScrollPosition = Vector2.zero;
@@ -32,6 +34,9 @@ public class ReferenceCheckWindow : EditorWindow
     private float _summaryMessageScrollViewHeight;
     private float _detailMessageScrollViewHeight;
 
+    private GUIStyle _detailMessageStyle;
+    private GUIStyle _summaryMessageStyle;
+
 
     private Rect _segmentingLineRect;
     private bool _segmentingLineMove = false;
@@ -39,16 +44,38 @@ public class ReferenceCheckWindow : EditorWindow
     private string _segmentingLineRatioKey = "SEGMENTING_LINE_RATIO";
 
     private Texture2D _segmentingLineTexture;
+    private Texture2D _oddLineBackgroundTexture;
+    private Texture2D _evenLineBackgroundTexture;
+    private Texture2D _selectedLineBackoundTexture;
+
     private Rect _cursorRect;
     private int _cursorRectWidth = 10;
     private float _lastWindowHeight;
     private bool _windowResize = false;
+
+    private int _selectedMessageIndex = -1;
+
     #endregion
 
     [MenuItem("PandoraTools/ReferenceChecker")]
     public static void ShowWindow()
     {
         GetWindow<ReferenceCheckWindow>(false, "ReferenceChecker", true);
+    }
+
+    private void OnEnable()
+    {
+        _summaryMessageStyle = new GUIStyle();
+        _summaryMessageStyle.alignment = TextAnchor.UpperLeft;
+        _summaryMessageStyle.padding = new RectOffset(2, 2, 2, 2);
+        _summaryMessageStyle.clipping = TextClipping.Clip;
+        _summaryMessageStyle.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
+
+        _detailMessageStyle = new GUIStyle();
+        _detailMessageStyle.alignment = TextAnchor.UpperLeft;
+        _detailMessageStyle.padding = new RectOffset(2, 2, 2, 2);
+        _detailMessageStyle.wordWrap = true;
+        _detailMessageStyle.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
     }
     private void OnFocus()
     {
@@ -65,36 +92,42 @@ public class ReferenceCheckWindow : EditorWindow
     public void OnGUI()
     {
         EditorGUILayout.BeginVertical();
-        //DrawHeadTabs();
         InitMessageScrollViewArea();
-        DrawButtons();
+        DrawHeader();
         DrawSegmentingLine();
         OnMouseEvent();
         OnScreenHeightResize();
         RefreshMessageScrollViewArea();
-
         DrawSummaryMessageArea();
 
         DrawDetailMessageArea();
+        OnMessageClick();
 
-        //DrawButtons();
         EditorGUILayout.EndVertical();
-        //Repaint();
     }
 
-    private void DrawHeadTabs()
+    private void DrawHeader()
     {
-        int newSelectedTab = _selectedTab;
-
-        newSelectedTab = GUILayout.Toolbar(newSelectedTab, _tabNames.ToArray());
-        if (newSelectedTab != _selectedTab)
+        GUILayout.BeginHorizontal();
+        DrawSearchArea();
+        DrawButtons();
+        GUILayout.EndHorizontal();
+    }
+    private void DrawSearchArea()
+    {
+        string newSearchFilter = EditorGUILayout.TextField("", _searchFilter, "SearchTextField");
+        if (GUILayout.Button("", "SearchCancelButton", GUILayout.Width(18f)))
         {
-            _selectedTab = newSelectedTab;
-            //加载对应活动下的内容
+            newSearchFilter = "";
+            GUIUtility.keyboardControl = 0;//把焦点从输入框移走
+        }
+        if (newSearchFilter != _searchFilter)
+        {
+            // todo 筛选显示项
         }
     }
 
-    private void DrawMessage( string message, MessageType messageType )
+    private void DrawMessage( int index, string message, MessageType messageType, float topPadding = 30f )
     {
         string guiStyleName = "";
         switch (messageType)
@@ -112,25 +145,69 @@ public class ReferenceCheckWindow : EditorWindow
                 break;
         }
 
-        EditorGUILayout.SelectableLabel(message, guiStyleName);
+        //EditorGUILayout.TextArea(message, guiStyleName);
+        Rect rect = new Rect(0, index * _messageLineHeight, Screen.width - 18f, _messageLineHeight);
+        DrawMessageBackground(index, rect);
+        GUI.Label(rect, message, guiStyleName);
+        //添加cursorRect
+        EditorGUIUtility.AddCursorRect(rect, MouseCursor.Text);
+    }
+
+
+    private void OnMessageClick()
+    {
+        int index = GetSeletedMessageIndex();
+        if (_selectedMessageIndex != index && index != -1)
+        {
+            _selectedMessageIndex = index;
+        }
+
+    }
+
+
+    private int GetSeletedMessageIndex()
+    {
+        if (Event.current.type != EventType.MouseUp)
+        {
+            return -1;
+        }
+        //鼠标弹起代表一次点击
+        Vector2 currentMousePosition = Event.current.mousePosition + _summaryMessageScrollPosition;
+        float height = _segmentingLinePositonToWindowHeightRatio * Screen.height + _summaryMessageScrollPosition.y;
+
+
+        if (currentMousePosition.y < _buttonHeight + _defaultPadding + _summaryMessageScrollPosition.y || currentMousePosition.y > height)
+        {
+            return -1;
+        }
+        int index = -1;
+        Rect currentRect;
+        for (int y = _buttonHeight + _defaultPadding; y < height; y += _messageLineHeight)
+        {
+            index++;
+            currentRect = new Rect(0, y, Screen.width - 18, _messageLineHeight);
+            if (currentRect.Contains(currentMousePosition) == true)
+            {
+                return index;
+            }
+        }
+
+        return -1;
 
     }
 
 
     private void DrawButtons()
     {
-        EditorGUILayout.BeginHorizontal();
-
-        if (GUILayout.Button("快照", GUILayout.Width(50f), GUILayout.Height(_buttonHeight)))
+        if (GUILayout.Button("快照", GUILayout.Width(80f), GUILayout.Height(_buttonHeight)))
         {
 
         }
 
-        if (GUILayout.Button("检查", GUILayout.Width(50f), GUILayout.Height(_buttonHeight)))
+        if (GUILayout.Button("检查", GUILayout.Width(80f), GUILayout.Height(_buttonHeight)))
         {
 
         }
-        EditorGUILayout.EndHorizontal();
     }
 
 
@@ -180,28 +257,36 @@ public class ReferenceCheckWindow : EditorWindow
     private void DrawSummaryMessageArea()
     {
         _summaryMessageScrollPosition = EditorGUILayout.BeginScrollView(_summaryMessageScrollPosition, GUILayout.Height(_summaryMessageScrollViewHeight));
-        DrawMessage("haipi", MessageType.Warn);
 
-        for (int i = 0; i < 20; i++)
+        MessageType type;
+        int num = 20;
+        for (int i = 0; i < num; i++)
         {
-            DrawMessage("haipi", MessageType.Info);
+            type = MessageType.Info;
+            if (i == 0)
+            {
+                type = MessageType.Warn;
+            }
+            if (i == num - 1)
+            {
+                type = MessageType.Error;
+            }
+            DrawMessage(i, "haipi", type);
         }
-        DrawMessage("haipi", MessageType.Error);
+
+        GUILayout.Space(num * _messageLineHeight);
         EditorGUILayout.EndScrollView();
     }
 
     private void DrawDetailMessageArea()
     {
         _detailMessageScrollPosition = EditorGUILayout.BeginScrollView(_detailMessageScrollPosition, GUILayout.Height(_detailMessageScrollViewHeight));
-        //EditorGUILayout.SelectableLabel("小说千千万万,好看的小说也\r\n层出不穷,今天小鹦鹉\r\n我就来给大家,推3本看\r\n了过瘾的科幻小说,每本都创意满满,让人追出\r\n黑眼圈,希望大家能够喜欢。小说\r\n千千万万,好看\r\n的小说也层出不穷,今天小鹦鹉我就来给大家,推3本看了过瘾的科幻小说\r\n,每本都创意满满,让人追出黑眼圈,希望大家\r\n能够喜欢。小说千千万万,好看\r\n的小说也层\r\n出不穷,今天小鹦鹉我就来给大家,推3本看了过\r\n小说千千万万,好看的小说也\r\n层出不穷,今天小鹦鹉\r\n我就来给大家,推3本看\r\n了过瘾的科幻小说,每本都创意满满,让人追出\r\n黑眼圈,希望大家能够喜欢。小说\r\n千千万万,好看\r\n的小说也层出不穷,今天小鹦鹉我就来给大家,推3本看了过瘾的科幻小说\r\n,每本都创意满满,让人追出黑眼圈,希望大家\r\n能够喜欢。小说千千万万,好看\r\n的小说也层\r\n出不穷,今天小鹦鹉我就来给大家,推3本看了过\r\n小说千千万万,好看的小说也\r\n层出不穷,今天小鹦鹉\r\n我就来给大家,推3本看\r\n了过瘾的科幻小说,每本都创意满满,让人追出\r\n黑眼圈,希望大家能够喜欢。小说\r\n千千万万,好看\r\n的小说也层出不穷,今天小鹦鹉我就来给大家,推3本看了过瘾的科幻小说\r\n,每本都创意满满,让人追出黑眼圈,希望大家\r\n能够喜欢。小说千千万万,好看\r\n的小说也层\r\n出不穷,今天小鹦鹉我就来给大家,推3本看了过\r\n");
+        EditorGUILayout.TextArea("百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。百度新闻是包含海量资讯的新闻服务平台,真实反映每时每刻的新闻热点。您可以搜索新闻事件、热点话题、人物动态、产品资讯等,快速了解它们的最新进展。。end", _detailMessageStyle);
 
-        DrawMessage("haipi", MessageType.Warn);
+        //加两个空行
+        EditorGUILayout.LabelField("");
+        EditorGUILayout.LabelField("");
 
-        for (int i = 0; i < 20; i++)
-        {
-            DrawMessage("haipi", MessageType.Info);
-        }
-        DrawMessage("haipi", MessageType.Error);
         EditorGUILayout.EndScrollView();
     }
 
@@ -209,17 +294,7 @@ public class ReferenceCheckWindow : EditorWindow
     {
         if (_segmentingLineTexture == null)
         {
-            _segmentingLineTexture = new Texture2D(1, 1);
-            _segmentingLineTexture.hideFlags = HideFlags.DontSave;
-            for (int i = 0; i < 1; i++)
-            {
-                for (int j = 0; j < 1; j++)
-                {
-                    _segmentingLineTexture.SetPixel(i, j, Color.black);
-                }
-            }
-            _segmentingLineTexture.Apply();
-            _segmentingLineTexture.filterMode = FilterMode.Point;
+            _segmentingLineTexture = CreateTexture(Vector2.one, Color.black);
         }
 
         GUI.DrawTexture(_segmentingLineRect, _segmentingLineTexture);
@@ -258,11 +333,7 @@ public class ReferenceCheckWindow : EditorWindow
         //只有分割线移动时计算radio,窗口变动不计算
         if (_segmentingLineMove == true)
         {
-            Debug.LogWarning(string.Format("lineMove = {0},windowResize = {1}", _segmentingLineMove, _windowResize));
             _segmentingLinePositonToWindowHeightRatio = Event.current.mousePosition.y / Screen.height;
-            Debug.LogError(string.Format("ratio:{0}", _segmentingLinePositonToWindowHeightRatio.ToString()));
-
-
 
         }
         if (_segmentingLineMove == true || _windowResize == true)
@@ -303,7 +374,55 @@ public class ReferenceCheckWindow : EditorWindow
         }
     }
 
+    private void DrawMessageBackground( int index, Rect rect, float topPadding = 30f )
+    {
+        if (_oddLineBackgroundTexture == null)
+        {
+            _oddLineBackgroundTexture = CreateTexture(Vector2.one, new Color(0.15f, 0.15f, 0.15f, 0.5f));
+        }
+        if (_evenLineBackgroundTexture == null)
+        {
+            _evenLineBackgroundTexture = CreateTexture(Vector2.one, new Color(0.2f, 0.2f, 0.2f, 0.5f));
 
+        }
+
+        if (_selectedLineBackoundTexture == null)
+        {
+            _selectedLineBackoundTexture = CreateTexture(Vector2.one, new Color(0, 0, 0.5f, 0.3f));
+        }
+
+
+        if (index == _selectedMessageIndex)
+        {
+            GUI.DrawTexture(rect, _selectedLineBackoundTexture);
+        }
+        else if (index % 2 == 0)
+        {
+            GUI.DrawTexture(rect, _evenLineBackgroundTexture);
+        }
+        else
+        {
+            GUI.DrawTexture(rect, _oddLineBackgroundTexture);
+        }
+    }
+
+    private Texture2D CreateTexture( Vector2 size, Color color )
+    {
+        Texture2D tex = new Texture2D((int)size.x, (int)size.y);
+        tex.hideFlags = HideFlags.DontSave;
+        for (int i = 0; i < size.x; i++)
+        {
+            for (int j = 0; j < size.y; j++)
+            {
+                tex.SetPixel(i, j, color);
+            }
+        }
+
+        tex.Apply();
+        tex.filterMode = FilterMode.Point;
+        return tex;
+
+    }
 }
 
 
