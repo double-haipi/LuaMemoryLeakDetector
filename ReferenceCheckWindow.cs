@@ -1,10 +1,4 @@
-﻿//分活动tab展示
-//分栏显示，简报和详情 
-//单条记录头部加图标，加背景图，可点击看详情
-//底部按钮
-
-
-
+﻿
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
