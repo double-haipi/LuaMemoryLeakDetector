@@ -35,7 +35,9 @@ public class ReferenceCheckWindow : EditorWindow
     private float _detailMessageScrollViewHeight;
 
     private GUIStyle _detailMessageStyle;
+    private int _detailMessageFontSize = 16;
     private GUIStyle _summaryMessageStyle;
+    private int _summaryMessageFontSize = 16;
 
 
     private Rect _segmentingLineRect;
@@ -65,17 +67,13 @@ public class ReferenceCheckWindow : EditorWindow
 
     private void OnEnable()
     {
-        _summaryMessageStyle = new GUIStyle();
-        _summaryMessageStyle.alignment = TextAnchor.UpperLeft;
-        _summaryMessageStyle.padding = new RectOffset(2, 2, 2, 2);
-        _summaryMessageStyle.clipping = TextClipping.Clip;
-        _summaryMessageStyle.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
 
         _detailMessageStyle = new GUIStyle();
         _detailMessageStyle.alignment = TextAnchor.UpperLeft;
         _detailMessageStyle.padding = new RectOffset(2, 2, 2, 2);
         _detailMessageStyle.wordWrap = true;
         _detailMessageStyle.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
+        _detailMessageStyle.fontSize = _detailMessageFontSize;
     }
     private void OnFocus()
     {
@@ -148,11 +146,21 @@ public class ReferenceCheckWindow : EditorWindow
         //EditorGUILayout.TextArea(message, guiStyleName);
         Rect rect = new Rect(0, index * _messageLineHeight, Screen.width - 18f, _messageLineHeight);
         DrawMessageBackground(index, rect);
-        GUI.Label(rect, message, guiStyleName);
+        _summaryMessageStyle = GetSummaryMessageStyle(guiStyleName);
+        GUI.Label(rect, message, _summaryMessageStyle);
         //添加cursorRect
         EditorGUIUtility.AddCursorRect(rect, MouseCursor.Text);
     }
 
+    private GUIStyle GetSummaryMessageStyle( string styleName )
+    {
+        GUIStyle style = new GUIStyle(styleName);
+        style.alignment = TextAnchor.UpperLeft;
+        style.clipping = TextClipping.Clip;
+        style.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
+        style.fontSize = _summaryMessageFontSize;
+        return style;
+    }
 
     private void OnMessageClick()
     {
