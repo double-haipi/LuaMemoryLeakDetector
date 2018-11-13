@@ -50,9 +50,11 @@ namespace com.tencent.pandora.tools
         private Texture2D _evenLineBackgroundTexture;
         private Texture2D _selectedLineBackoundTexture;
 
-        private Dictionary<int, string> _referenceDescriptionMap;
-        private Dictionary<object, int> _referenceNotReleased;
+        private Dictionary<int, string> _referenceDescriptionMap = new Dictionary<int, string>();
         private List<string> _filtedReferenceInfo = new List<string>();
+        private int _totalReferenceNum = 0;
+        private bool _printObjMap = false;
+
 
         private bool _isSnapInfoDisplaying = true;
         private string _isSnapInfoDisplayingKey = "SNAP_INFO_IS_DISPLAYING";
@@ -68,6 +70,7 @@ namespace com.tencent.pandora.tools
         {
             //每次获取到焦点时初始化一次
             _needInitScrollViewArea = true;
+            _printObjMap = EditorPrefs.GetBool(ReferenceChecker.Instance.PrintObjMapKey, false);
             _isSnapInfoDisplaying = EditorPrefs.GetBool(_isSnapInfoDisplayingKey, true);
             _detailInfoStyle = new GUIStyle();
             _detailInfoStyle.alignment = TextAnchor.UpperLeft;
@@ -142,12 +145,29 @@ namespace com.tencent.pandora.tools
         private void DrawHeader()
         {
             GUILayout.BeginHorizontal();
+            DrawReferenceTotoalNumber();
             DrawSearchArea();
+            DrawToggle();
             DrawButtons();
             GUILayout.EndHorizontal();
         }
+
+        private void DrawReferenceTotoalNumber()
+        {
+            GUILayout.BeginVertical();
+            GUILayout.Space(10);
+            Color color = _detailInfoStyle.normal.textColor;
+            _detailInfoStyle.normal.textColor = new Color(0f, 1f, 0f, 1f);
+            GUILayout.Label(string.Format("Total reference:{0}", _totalReferenceNum), _detailInfoStyle, GUILayout.MinWidth(140f));
+            _detailInfoStyle.normal.textColor = color;
+            GUILayout.EndVertical();
+        }
+
         private void DrawSearchArea()
         {
+            GUILayout.BeginVertical();
+            GUILayout.Space(10);
+            GUILayout.BeginHorizontal();
             string newSearchFilter = EditorGUILayout.TextField("", _searchFilter, "SearchTextField");
             if (GUILayout.Button("", "SearchCancelButton", GUILayout.Width(18f)))
             {
@@ -159,6 +179,21 @@ namespace com.tencent.pandora.tools
                 _searchFilter = newSearchFilter;
                 FilterDisplayInfo(_searchFilter);
             }
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
+        }
+
+        private void DrawToggle()
+        {
+            GUILayout.BeginVertical();
+            GUILayout.Space(10);
+            bool canPrint = GUILayout.Toggle(_printObjMap, "Print objMap");
+            if (canPrint != _printObjMap)
+            {
+                _printObjMap = canPrint;
+                EditorPrefs.SetBool(ReferenceChecker.Instance.PrintObjMapKey, _printObjMap);
+            }
+            GUILayout.EndVertical();
         }
 
         private void FilterDisplayInfo(string filterKey)
@@ -172,6 +207,7 @@ namespace com.tencent.pandora.tools
                     _filtedReferenceInfo.Add(item.Value);
                 }
             }
+            _totalReferenceNum = _filtedReferenceInfo.Count;
             Repaint();
         }
 
@@ -195,14 +231,17 @@ namespace com.tencent.pandora.tools
             {
                 _isSnapInfoDisplaying = false;
                 EditorPrefs.SetBool(_isSnapInfoDisplayingKey, false);
-                _referenceNotReleased = ReferenceChecker.Instance.GetReferenceDataWhenPanelClosed();
+                ReferenceChecker.Instance.GetReferenceDataWhenPanelClosed();
                 _referenceDescriptionMap = ReferenceChecker.Instance.ReferenceDescription;
                 FilterDisplayInfo(_searchFilter);
             }
 
             if (GUILayout.Button("清空显示", GUILayout.Width(80f), GUILayout.Height(_buttonHeight)))
             {
+                _referenceDescriptionMap.Clear();
                 _filtedReferenceInfo.Clear();
+                _totalReferenceNum = 0;
+                Repaint();
             }
         }
 

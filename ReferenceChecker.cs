@@ -12,8 +12,10 @@ namespace com.tencent.pandora.tools
     {
         private static ReferenceChecker _instance;
         private Dictionary<int, string> _referenceDescriptionMap = new Dictionary<int, string>();
-        private Dictionary<object, int> _referenceDataWhenPanelOpened = new Dictionary<object, int>();
-        private Dictionary<object, int> _referenceDataWhenPanelClosed = new Dictionary<object, int>();
+        private Dictionary<object, int> _referenceDataWhenPanelOpened;
+        private Dictionary<object, int> _referenceDataWhenPanelClosed;
+
+        private string _printObjMapKey = "PRINT_ORIGINAL_REFERENCE";
 
         public static ReferenceChecker Instance
         {
@@ -33,6 +35,11 @@ namespace com.tencent.pandora.tools
             {
                 return _referenceDescriptionMap;
             }
+        }
+
+        public string PrintObjMapKey
+        {
+            get { return _printObjMapKey; }
         }
 
         public Dictionary<object, int> GetReferenceDataWhenPanelOpened()
@@ -72,23 +79,28 @@ namespace com.tencent.pandora.tools
                 {
                     newMap[item.Value] = description;
                 }
-                else
-                {
-                    //DisplayWarningDialog("未释放的对象在先前的快照中不存在，请检查原因。");
-                }
             }
             referenceDescriptionMap = newMap;
         }
 
         private void LuaGC()
         {
-            LuaDLL.pua_gc((IntPtr)GetLuaStatePointer(), LuaGCOptions.LUA_GCCOLLECT, 0);
+            object luaStatePointer = GetLuaStatePointer();
+            if (luaStatePointer == null)
+            {
+                return;
+            }
+            LuaDLL.pua_gc((IntPtr)luaStatePointer, LuaGCOptions.LUA_GCCOLLECT, 0);
         }
 
         private object GetLuaStatePointer()
         {
             Type luaStateType = FindType("com.tencent.pandora.LuaState");
             object luaState = luaStateType.GetField("main").GetValue(null);
+            if (luaState == null)
+            {
+                return null;
+            }
             PropertyInfo pointerPropertyInfo = luaStateType.GetProperty("L", BindingFlags.Public | BindingFlags.Instance);
             object luaStatePointer = pointerPropertyInfo.GetValue(luaState, null);
             return luaStatePointer;
@@ -97,15 +109,19 @@ namespace com.tencent.pandora.tools
         private Dictionary<object, int> GetReferenceData()
         {
             object luaStatePointer = GetLuaStatePointer();
-
+            if (luaStatePointer == null)
+            {
+                return new Dictionary<object, int>();
+            }
             Type objectCacheType = FindType("com.tencent.pandora.ObjectCache");
             MethodInfo objectCacheGetInfo = objectCacheType.GetMethod("get", BindingFlags.Public | BindingFlags.Static);
             object objectCache = objectCacheGetInfo.Invoke(null, new object[] { luaStatePointer });
 
             FieldInfo objMapInfo = objectCacheType.GetField("objMap", BindingFlags.NonPublic | BindingFlags.Instance);
-            object objMap = objMapInfo.GetValue(objectCache);
+            Dictionary<object, int> objMap = objMapInfo.GetValue(objectCache) as Dictionary<object, int>;
 
-            return objMap as Dictionary<object, int>;
+            PrintOriginalReferenceData(objMap);
+            return objMap;
         }
 
         private Type FindType(string typeName)
@@ -159,6 +175,7 @@ namespace com.tencent.pandora.tools
 
             foreach (var item in referenceData)
             {
+                description = "";
                 if (item.Key == null)
                 {
                     continue;
@@ -166,16 +183,17 @@ namespace com.tencent.pandora.tools
                 if (item.Key is GameObject)
                 {
                     go = item.Key as GameObject;
-                    description = string.Format("Object Type：{0}, Object Name：{1} \r\n Path In Hierarchy:\r\n{2}", "GameObject", go.name, GetTransformPath(go.transform));
+                    description = string.Format("ObjInfo：{0},\t Reference Index:{1} \r\n Path In Hierarchy:\r\n{2}", item.Key, item.Value, GetTransformPath(go.transform));
                 }
                 else if (item.Key is Component)
                 {
                     component = item.Key as Component;
-                    description = string.Format("Object Type：{0}, Object Name：{1} \r\n Path In Hierarchy:\r\n{2}", component.GetType().ToString(), component.name, GetTransformPath(component.transform));
+                    description = string.Format("ObjInfo：{0},\t Reference Index:{1} \r\n Path In Hierarchy:\r\n{2}", item.Key, item.Value, GetTransformPath(component.transform));
                 }
 
                 if (string.IsNullOrEmpty(description) == false)
                 {
+
                     referenceDescriptionMap[item.Value] = description;
                 }
             }
@@ -224,6 +242,19 @@ namespace com.tencent.pandora.tools
         public static void DisplayWarningDialog(string message, string title = "")
         {
             EditorUtility.DisplayDialog(title, message, "我知道了");
+        }
+
+        public void PrintOriginalReferenceData(Dictionary<object, int> dict)
+        {
+            if (EditorPrefs.GetBool(_printObjMapKey, false) == false)
+            {
+                return;
+            }
+
+            foreach (var item in dict)
+            {
+                Debug.Log(string.Format("<color=#ffff00>object:{0},index:{1}</color>", item.Key, item.Value));
+            }
         }
     }
 }
