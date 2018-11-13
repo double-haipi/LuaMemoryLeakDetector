@@ -15,8 +15,6 @@ namespace com.tencent.pandora.tools
         }
 
         #region 参数
-        private string _searchFilter = "";
-
         private int _defaultPadding = 2;
         private int _buttonHeight = 30;
         private int _infoLineHeight = 30;
@@ -51,13 +49,18 @@ namespace com.tencent.pandora.tools
         private Texture2D _selectedLineBackoundTexture;
 
         private Dictionary<int, string> _referenceDescriptionMap = new Dictionary<int, string>();
-        private List<string> _filtedReferenceInfo = new List<string>();
-        private int _totalReferenceNum = 0;
-        private bool _printObjMap = false;
+        private List<string> _referenceInfo = new List<string>();
+
+        private bool _isDisplayingFirstSnap = true;
+        private string _isDisplayingFirstSnapKey = "IS_DISPLAYING_FIRST_SNAP";
+
+        private bool _hideIntroductionWhenOpen = false;
+        private static string _hideIntroductionWhenOpenKey = "SHOW_INTRODUCTION_WHEN_OPEN";
+
+        private bool _hasDisplayedIntrodution = false;
+        private static string _hasDisplayedIntrodutionKey = "HAS_DISPLAYED_INTRODUCTION";
 
 
-        private bool _isSnapInfoDisplaying = true;
-        private string _isSnapInfoDisplayingKey = "SNAP_INFO_IS_DISPLAYING";
         #endregion
 
         [MenuItem("PandoraTools/ReferenceChecker")]
@@ -70,8 +73,13 @@ namespace com.tencent.pandora.tools
         {
             //每次获取到焦点时初始化一次
             _needInitScrollViewArea = true;
-            _printObjMap = EditorPrefs.GetBool(ReferenceChecker.Instance.PrintObjMapKey, false);
-            _isSnapInfoDisplaying = EditorPrefs.GetBool(_isSnapInfoDisplayingKey, true);
+            _hideIntroductionWhenOpen = EditorPrefs.GetBool(_hideIntroductionWhenOpenKey, false);
+            //防止改变_hideIntroductionWhenOpen 时立马弹出提示窗
+            if (_hideIntroductionWhenOpen == true)
+            {
+                EditorPrefs.SetBool(_hasDisplayedIntrodutionKey, true);
+            }
+            _isDisplayingFirstSnap = EditorPrefs.GetBool(_isDisplayingFirstSnapKey, true);
             _detailInfoStyle = new GUIStyle();
             _detailInfoStyle.alignment = TextAnchor.UpperLeft;
             _detailInfoStyle.padding = new RectOffset(2, 2, 2, 2);
@@ -86,6 +94,11 @@ namespace com.tencent.pandora.tools
             EditorPrefs.SetFloat(_segmentingLineRatioKey, _segmentingLinePositonToWindowHeightRatio);
         }
 
+        private void OnDestroy()
+        {
+            EditorPrefs.SetBool(_hasDisplayedIntrodutionKey, false);
+        }
+
         public void OnGUI()
         {
             EditorGUILayout.BeginVertical();
@@ -98,6 +111,7 @@ namespace com.tencent.pandora.tools
             DrawBriefInfoArea();
             DrawDetailInfoArea();
             OnInfoClick();
+            ShowIntroduction();
             EditorGUILayout.EndVertical();
         }
 
@@ -145,104 +159,95 @@ namespace com.tencent.pandora.tools
         private void DrawHeader()
         {
             GUILayout.BeginHorizontal();
-            DrawReferenceTotoalNumber();
-            DrawSearchArea();
             DrawToggle();
             DrawButtons();
             GUILayout.EndHorizontal();
-        }
-
-        private void DrawReferenceTotoalNumber()
-        {
-            GUILayout.BeginVertical();
-            GUILayout.Space(10);
-            Color color = _detailInfoStyle.normal.textColor;
-            _detailInfoStyle.normal.textColor = new Color(0f, 1f, 0f, 1f);
-            GUILayout.Label(string.Format("Total reference:{0}", _totalReferenceNum), _detailInfoStyle, GUILayout.MinWidth(140f));
-            _detailInfoStyle.normal.textColor = color;
-            GUILayout.EndVertical();
-        }
-
-        private void DrawSearchArea()
-        {
-            GUILayout.BeginVertical();
-            GUILayout.Space(10);
-            GUILayout.BeginHorizontal();
-            string newSearchFilter = EditorGUILayout.TextField("", _searchFilter, "SearchTextField");
-            if (GUILayout.Button("", "SearchCancelButton", GUILayout.Width(18f)))
-            {
-                newSearchFilter = "";
-                GUIUtility.keyboardControl = 0;//把焦点从输入框移走
-            }
-            if (newSearchFilter != _searchFilter)
-            {
-                _searchFilter = newSearchFilter;
-                FilterDisplayInfo(_searchFilter);
-            }
-            GUILayout.EndHorizontal();
-            GUILayout.EndVertical();
         }
 
         private void DrawToggle()
         {
             GUILayout.BeginVertical();
             GUILayout.Space(10);
-            bool canPrint = GUILayout.Toggle(_printObjMap, "Print objMap");
-            if (canPrint != _printObjMap)
+            bool hideIntroduction = GUILayout.Toggle(_hideIntroductionWhenOpen, "打开工具时禁止弹出说明窗口");
+            if (hideIntroduction != _hideIntroductionWhenOpen)
             {
-                _printObjMap = canPrint;
-                EditorPrefs.SetBool(ReferenceChecker.Instance.PrintObjMapKey, _printObjMap);
+                _hideIntroductionWhenOpen = hideIntroduction;
+                EditorPrefs.SetBool(_hideIntroductionWhenOpenKey, _hideIntroductionWhenOpen);
             }
             GUILayout.EndVertical();
         }
 
-        private void FilterDisplayInfo(string filterKey)
-        {
-            filterKey = filterKey.ToLower();
-            _filtedReferenceInfo.Clear();
-            foreach (var item in _referenceDescriptionMap)
-            {
-                if (item.Value.ToLower().Contains(filterKey))
-                {
-                    _filtedReferenceInfo.Add(item.Value);
-                }
-            }
-            _totalReferenceNum = _filtedReferenceInfo.Count;
-            Repaint();
-        }
-
         private void DrawButtons()
         {
-            if (GUILayout.Button("使用说明", GUILayout.Width(80f), GUILayout.Height(_buttonHeight)))
+            if (GUILayout.Button("打开活动面板后快照", GUILayout.Height(_buttonHeight)))
             {
-                ReferenceChecker.DisplayWarningDialog(" 1.运行工程，打开待检测活动，对活动做些常用的交互操作\r\n 2.按下'快照'按钮,对lua引用的GameObject/Component 对象做快照.\r\n 3.关闭活动，但保持工程处于运行中，按下'检查'按钮，可以看到未释放的对象的相关信息.", "使用说明");
-            }
-
-            if (GUILayout.Button("快照", GUILayout.Width(80f), GUILayout.Height(_buttonHeight)))
-            {
-                _isSnapInfoDisplaying = true;
-                EditorPrefs.SetBool(_isSnapInfoDisplayingKey, true);
+                _isDisplayingFirstSnap = true;
+                EditorPrefs.SetBool(_isDisplayingFirstSnapKey, true);
                 ReferenceChecker.Instance.GetReferenceDataWhenPanelOpened();
                 _referenceDescriptionMap = ReferenceChecker.Instance.ReferenceDescription;
-                FilterDisplayInfo(_searchFilter);
+                FillReferenceInfo();
             }
 
-            if (GUILayout.Button("检查", GUILayout.Width(80f), GUILayout.Height(_buttonHeight)))
+            if (GUILayout.Button("关闭活动面板后快照", GUILayout.Height(_buttonHeight)))
             {
-                _isSnapInfoDisplaying = false;
-                EditorPrefs.SetBool(_isSnapInfoDisplayingKey, false);
+                _isDisplayingFirstSnap = false;
+                EditorPrefs.SetBool(_isDisplayingFirstSnapKey, false);
                 ReferenceChecker.Instance.GetReferenceDataWhenPanelClosed();
                 _referenceDescriptionMap = ReferenceChecker.Instance.ReferenceDescription;
-                FilterDisplayInfo(_searchFilter);
+                FillReferenceInfo();
             }
 
             if (GUILayout.Button("清空显示", GUILayout.Width(80f), GUILayout.Height(_buttonHeight)))
             {
                 _referenceDescriptionMap.Clear();
-                _filtedReferenceInfo.Clear();
-                _totalReferenceNum = 0;
+                _referenceInfo.Clear();
                 Repaint();
             }
+        }
+
+        //把展示说明放在OnGUI中是为了能使界面展示出来后，再显示说明。
+        private void ShowIntroduction()
+        {
+            if (EditorPrefs.GetBool(_hideIntroductionWhenOpenKey, false) == true)
+            {
+                return;
+            }
+            if (EditorPrefs.GetBool(_hasDisplayedIntrodutionKey, false) == true)
+            {
+                return;
+            }
+
+            string content = "使用说明：\r\n\r\n1.运行工程，打开待检测活动面板，对面板做全面交互操作。\r\n 2.按下'打开活动面板后快照'按钮,对lua引用的GameObject/Component 对象做第一次快照。\r\n 3.关闭活动面板，但保持工程处于运行中，按下'关闭活动面板后快照'按钮，显示区会显示未释放的对象的相关信息。";
+
+
+            GUIStyle instructionStyle = new GUIStyle("flow node 0");
+            instructionStyle.alignment = TextAnchor.UpperLeft;
+            instructionStyle.wordWrap = true;
+            instructionStyle.padding = new RectOffset(20, 20, 40, 0);
+            instructionStyle.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
+            instructionStyle.fontSize = _detailInfoFontSize;
+
+            Rect position = new Rect(Screen.width / 2.0f - 150, Screen.height / 2.0f - 100, 300, 200);
+            GUI.Box(position, content, instructionStyle);
+
+            Rect closeButtonPosition = new Rect(Screen.width / 2.0f + 135, Screen.height / 2.0f - 110, 20, 20);
+            if (GUI.Button(closeButtonPosition, "", "TL SelectionBarCloseButton"))
+            {
+                EditorPrefs.SetBool(_hasDisplayedIntrodutionKey, true);
+                Repaint();
+            }
+
+        }
+
+
+        private void FillReferenceInfo()
+        {
+            _referenceInfo.Clear();
+            foreach (var item in _referenceDescriptionMap)
+            {
+                _referenceInfo.Add(item.Value);
+            }
+            Repaint();
         }
 
         private void DrawSegmentingLine()
@@ -302,12 +307,12 @@ namespace com.tencent.pandora.tools
         {
             _briefInfoScrollPosition = EditorGUILayout.BeginScrollView(_briefInfoScrollPosition, GUILayout.Height(_briefInfoScrollViewHeight));
 
-            InfoType type = (_isSnapInfoDisplaying == true ? InfoType.Info : InfoType.Warn);
+            InfoType type = (_isDisplayingFirstSnap == true ? InfoType.Info : InfoType.Warn);
 
-            int length = _filtedReferenceInfo.Count;
+            int length = _referenceInfo.Count;
             for (int i = 0; i < length; i++)
             {
-                DrawInfo(i, _filtedReferenceInfo[i].Substring(0, _filtedReferenceInfo[i].IndexOf("\r\n")), type);
+                DrawInfo(i, _referenceInfo[i].Substring(0, _referenceInfo[i].IndexOf("\r\n")), type);
             }
             GUILayout.Space(length * _infoLineHeight);
             EditorGUILayout.EndScrollView();
@@ -382,9 +387,9 @@ namespace com.tencent.pandora.tools
         private void DrawDetailInfoArea()
         {
             _detailInfoScrollPosition = EditorGUILayout.BeginScrollView(_detailInfoScrollPosition, GUILayout.Height(_detailInfoScrollViewHeight));
-            if (-1 < _selectedInfoIndex && _selectedInfoIndex < _filtedReferenceInfo.Count)
+            if (-1 < _selectedInfoIndex && _selectedInfoIndex < _referenceInfo.Count)
             {
-                EditorGUILayout.TextArea(_filtedReferenceInfo[_selectedInfoIndex], _detailInfoStyle);
+                EditorGUILayout.TextArea(_referenceInfo[_selectedInfoIndex], _detailInfoStyle);
             }
             else
             {

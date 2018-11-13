@@ -15,8 +15,6 @@ namespace com.tencent.pandora.tools
         private Dictionary<object, int> _referenceDataWhenPanelOpened;
         private Dictionary<object, int> _referenceDataWhenPanelClosed;
 
-        private string _printObjMapKey = "PRINT_ORIGINAL_REFERENCE";
-
         public static ReferenceChecker Instance
         {
             get
@@ -35,11 +33,6 @@ namespace com.tencent.pandora.tools
             {
                 return _referenceDescriptionMap;
             }
-        }
-
-        public string PrintObjMapKey
-        {
-            get { return _printObjMapKey; }
         }
 
         public Dictionary<object, int> GetReferenceDataWhenPanelOpened()
@@ -69,43 +62,6 @@ namespace com.tencent.pandora.tools
             return _referenceDataWhenPanelClosed;
         }
 
-        private void UpdateReferenceDescription(Dictionary<object, int> referenceData, ref Dictionary<int, string> referenceDescriptionMap)
-        {
-            Dictionary<int, string> newMap = new Dictionary<int, string>();
-            string description = "";
-            foreach (var item in referenceData)
-            {
-                if (referenceDescriptionMap.TryGetValue(item.Value, out description))
-                {
-                    newMap[item.Value] = description;
-                }
-            }
-            referenceDescriptionMap = newMap;
-        }
-
-        private void LuaGC()
-        {
-            object luaStatePointer = GetLuaStatePointer();
-            if (luaStatePointer == null)
-            {
-                return;
-            }
-            LuaDLL.pua_gc((IntPtr)luaStatePointer, LuaGCOptions.LUA_GCCOLLECT, 0);
-        }
-
-        private object GetLuaStatePointer()
-        {
-            Type luaStateType = FindType("com.tencent.pandora.LuaState");
-            object luaState = luaStateType.GetField("main").GetValue(null);
-            if (luaState == null)
-            {
-                return null;
-            }
-            PropertyInfo pointerPropertyInfo = luaStateType.GetProperty("L", BindingFlags.Public | BindingFlags.Instance);
-            object luaStatePointer = pointerPropertyInfo.GetValue(luaState, null);
-            return luaStatePointer;
-        }
-
         private Dictionary<object, int> GetReferenceData()
         {
             object luaStatePointer = GetLuaStatePointer();
@@ -120,8 +76,20 @@ namespace com.tencent.pandora.tools
             FieldInfo objMapInfo = objectCacheType.GetField("objMap", BindingFlags.NonPublic | BindingFlags.Instance);
             Dictionary<object, int> objMap = objMapInfo.GetValue(objectCache) as Dictionary<object, int>;
 
-            PrintOriginalReferenceData(objMap);
             return objMap;
+        }
+
+        private object GetLuaStatePointer()
+        {
+            Type luaStateType = FindType("com.tencent.pandora.LuaState");
+            object luaState = luaStateType.GetField("main").GetValue(null);
+            if (luaState == null)
+            {
+                return null;
+            }
+            PropertyInfo pointerPropertyInfo = luaStateType.GetProperty("L", BindingFlags.Public | BindingFlags.Instance);
+            object luaStatePointer = pointerPropertyInfo.GetValue(luaState, null);
+            return luaStatePointer;
         }
 
         private Type FindType(string typeName)
@@ -148,56 +116,69 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        private void FilterRefereceData(ref Dictionary<object, int> source)
-        {
-            List<object> deleteList = new List<object>();
-            foreach (var item in source)
-            {
-                bool valid = (item.Key is UnityEngine.GameObject || item.Key is UnityEngine.Component);
-                if (valid == false)
-                {
-                    deleteList.Add(item.Key);
-                }
-            }
-
-            for (int i = 0, length = deleteList.Count; i < length; i++)
-            {
-                source.Remove(deleteList[i]);
-            }
-        }
-
         private void SetReferenceDescription(Dictionary<object, int> referenceData, ref Dictionary<int, string> referenceDescriptionMap)
         {
             referenceDescriptionMap.Clear();
             GameObject go = null;
             Component component = null;
             string description = "";
-
-            foreach (var item in referenceData)
+            try
             {
-                description = "";
-                if (item.Key == null)
+                foreach (var item in referenceData)
                 {
-                    continue;
-                }
-                if (item.Key is GameObject)
-                {
-                    go = item.Key as GameObject;
-                    description = string.Format("ObjInfo：{0},\t Reference Index:{1} \r\n Path In Hierarchy:\r\n{2}", item.Key, item.Value, GetTransformPath(go.transform));
-                }
-                else if (item.Key is Component)
-                {
-                    component = item.Key as Component;
-                    description = string.Format("ObjInfo：{0},\t Reference Index:{1} \r\n Path In Hierarchy:\r\n{2}", item.Key, item.Value, GetTransformPath(component.transform));
-                }
+                    description = "";
+                    if (item.Key == null)
+                    {
+                        continue;
+                    }
+                    if (item.Key is GameObject)
+                    {
+                        go = item.Key as GameObject;
+                        description = string.Format("ObjInfo：{0},\t Reference Index:{1} \r\n Path In Hierarchy:\r\n{2}", item.Key, item.Value, GetTransformPath(go.transform));
+                    }
+                    else if (item.Key is Component)
+                    {
+                        component = item.Key as Component;
+                        description = string.Format("ObjInfo：{0},\t Reference Index:{1} \r\n Path In Hierarchy:\r\n{2}", item.Key, item.Value, GetTransformPath(component.transform));
+                    }
 
-                if (string.IsNullOrEmpty(description) == false)
-                {
+                    if (string.IsNullOrEmpty(description) == false)
+                    {
 
-                    referenceDescriptionMap[item.Value] = description;
+                        referenceDescriptionMap[item.Value] = description;
+                    }
                 }
             }
+            catch (Exception)
+            {
+                Debug.LogWarning("在关闭面板后，不能点击'打开活动面板后快照'");
+            }
         }
+
+        private void LuaGC()
+        {
+            object luaStatePointer = GetLuaStatePointer();
+            if (luaStatePointer == null)
+            {
+                return;
+            }
+            LuaDLL.pua_gc((IntPtr)luaStatePointer, LuaGCOptions.LUA_GCCOLLECT, 0);
+        }
+
+        private void UpdateReferenceDescription(Dictionary<object, int> referenceData, ref Dictionary<int, string> referenceDescriptionMap)
+        {
+            Dictionary<int, string> newMap = new Dictionary<int, string>();
+            string description = "";
+            foreach (var item in referenceData)
+            {
+                if (referenceDescriptionMap.TryGetValue(item.Value, out description))
+                {
+                    newMap[item.Value] = description;
+                }
+            }
+            referenceDescriptionMap = newMap;
+        }
+
 
         //path 是相对于活动面板的，把UI Root，Canvas 头去掉。
         private string GetTransformPath(Transform trans)
@@ -242,19 +223,6 @@ namespace com.tencent.pandora.tools
         public static void DisplayWarningDialog(string message, string title = "")
         {
             EditorUtility.DisplayDialog(title, message, "我知道了");
-        }
-
-        public void PrintOriginalReferenceData(Dictionary<object, int> dict)
-        {
-            if (EditorPrefs.GetBool(_printObjMapKey, false) == false)
-            {
-                return;
-            }
-
-            foreach (var item in dict)
-            {
-                Debug.Log(string.Format("<color=#ffff00>object:{0},index:{1}</color>", item.Key, item.Value));
-            }
         }
     }
 }
