@@ -18,6 +18,7 @@ namespace com.tencent.pandora.tools
         private int _defaultPadding = 2;
         private int _buttonHeight = 30;
         private int _headerHeight = 120;
+        private int _titleHeight = 20;
         private int _infoLineHeight = 30;
 
         private bool _needInitScrollViewArea = false;
@@ -33,7 +34,7 @@ namespace com.tencent.pandora.tools
         private int _detailInfoFontSize = 12;
         private GUIStyle _briefInfoStyle;
         private int _briefInfoFontSize = 12;
-        GUIStyle instructionStyle = new GUIStyle("flow node 0");
+        GUIStyle instructionStyle;
 
         private Rect _segmentingLineRect;
         private bool _segmentingLineMove = false;
@@ -58,6 +59,8 @@ namespace com.tencent.pandora.tools
 
         private string _content = "说明：\r\n1.打开待检测活动面板，对面板做全面交互操作。\r\n 2.点击'打开活动面板后快照',对引用关系做第一次快照。\r\n 3.关闭活动面板，但保持工程处于运行中，点击'关闭活动面板后快照'，显示区显示的即为未释放对象。";
         private Rect _instructionPosition;
+
+        private string _title;
         #endregion
 
         [MenuItem("PandoraTools/ReferenceChecker")]
@@ -70,7 +73,7 @@ namespace com.tencent.pandora.tools
         {
             //每次获取到焦点时初始化一次
             _needInitScrollViewArea = true;
-            
+
             _isDisplayingFirstSnap = EditorPrefs.GetBool(_isDisplayingFirstSnapKey, true);
 
             _detailInfoStyle = new GUIStyle();
@@ -80,11 +83,7 @@ namespace com.tencent.pandora.tools
             _detailInfoStyle.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
             _detailInfoStyle.fontSize = _detailInfoFontSize;
 
-            instructionStyle.alignment = TextAnchor.UpperLeft;
-            instructionStyle.wordWrap = true;
-            instructionStyle.padding = new RectOffset(10, 10, 30, 0);
-            instructionStyle.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
-            instructionStyle.fontSize = _detailInfoFontSize;
+
 
             _instructionPosition = new Rect(0, 0, 320, _headerHeight);
         }
@@ -101,6 +100,7 @@ namespace com.tencent.pandora.tools
             InitInfoScrollViewArea();
             DrawHeader();
             GUILayout.Space(_headerHeight - _buttonHeight);
+            DrawTitle();
             DrawSegmentingLine();
             OnMouseEvent();
             OnScreenHeightResize();
@@ -130,7 +130,7 @@ namespace com.tencent.pandora.tools
             float screenHeight = Screen.height;
             float ySegmentingLinePosition = screenHeight * _segmentingLinePositonToWindowHeightRatio;
 
-            _briefInfoScrollViewHeight = ySegmentingLinePosition - _headerHeight - _defaultPadding;
+            _briefInfoScrollViewHeight = ySegmentingLinePosition - _headerHeight - _titleHeight - _defaultPadding;
             _detailInfoScrollViewHeight = screenHeight - ySegmentingLinePosition - _defaultPadding;
 
             if (_segmentingLineRect == null)
@@ -170,6 +170,7 @@ namespace com.tencent.pandora.tools
                 ReferenceChecker.Instance.GetReferenceDataWhenPanelOpened();
                 _referenceDescriptionMap = ReferenceChecker.Instance.ReferenceDescription;
                 FillReferenceInfo();
+                _title = "以下是lua引用的c#对象：";
             }
 
             if (GUILayout.Button("关闭活动面板后快照", GUILayout.Height(_buttonHeight)))
@@ -179,21 +180,36 @@ namespace com.tencent.pandora.tools
                 ReferenceChecker.Instance.GetReferenceDataWhenPanelClosed();
                 _referenceDescriptionMap = ReferenceChecker.Instance.ReferenceDescription;
                 FillReferenceInfo();
+                _title = "以下是lua引用的c#对象泄漏项：";
             }
 
             if (GUILayout.Button("清空显示", GUILayout.Width(80f), GUILayout.Height(_buttonHeight)))
             {
                 _referenceDescriptionMap.Clear();
                 _referenceInfo.Clear();
+                _title = "";
                 Repaint();
             }
         }
 
         private void ShowIntroduction()
         {
+            instructionStyle = new GUIStyle("flow node 0");
+            instructionStyle.alignment = TextAnchor.UpperLeft;
+            instructionStyle.wordWrap = true;
+            instructionStyle.padding = new RectOffset(10, 10, 30, 0);
+            instructionStyle.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
+            instructionStyle.fontSize = _detailInfoFontSize;
             GUI.Box(_instructionPosition, _content, instructionStyle);
         }
 
+        private void DrawTitle()
+        {
+            Color originalColor = _detailInfoStyle.normal.textColor;
+            _detailInfoStyle.normal.textColor = new Color(0f, 1f, 0f, 1f);
+            GUILayout.Label(_title, _detailInfoStyle, GUILayout.Height(_titleHeight));
+            _detailInfoStyle.normal.textColor = originalColor;
+        }
 
         private void FillReferenceInfo()
         {
@@ -379,13 +395,13 @@ namespace com.tencent.pandora.tools
             Vector2 currentMousePosition = Event.current.mousePosition + _briefInfoScrollPosition;
             float height = _segmentingLinePositonToWindowHeightRatio * Screen.height + _briefInfoScrollPosition.y;
 
-            if (currentMousePosition.y < _headerHeight + _defaultPadding + _briefInfoScrollPosition.y || currentMousePosition.y > height)
+            if (currentMousePosition.y < _headerHeight + _titleHeight + _defaultPadding + _briefInfoScrollPosition.y || currentMousePosition.y > height)
             {
                 return -1;
             }
             int index = -1;
             Rect currentRect;
-            for (int y = _headerHeight + _defaultPadding; y < height; y += _infoLineHeight)
+            for (int y = _headerHeight + _titleHeight + _defaultPadding; y < height; y += _infoLineHeight)
             {
                 index++;
                 currentRect = new Rect(0, y, Screen.width - 18, _infoLineHeight);

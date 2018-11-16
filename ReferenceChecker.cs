@@ -134,12 +134,12 @@ namespace com.tencent.pandora.tools
                     if (item.Key is GameObject)
                     {
                         go = item.Key as GameObject;
-                        description = string.Format("ObjInfo：{0},\t Reference Index:{1} \r\n Path In Hierarchy:\r\n{2}", item.Key, item.Value, GetTransformPath(go.transform));
+                        description = string.Format("ObjInfo：\t{0}\r\nPath In Hierarchy:\t{1}", item.Key, GetTransformPath(go.transform));
                     }
                     else if (item.Key is Component)
                     {
                         component = item.Key as Component;
-                        description = string.Format("ObjInfo：{0},\t Reference Index:{1} \r\n Path In Hierarchy:\r\n{2}", item.Key, item.Value, GetTransformPath(component.transform));
+                        description = string.Format("ObjInfo：\t{0}\r\nPath In Hierarchy:\t{1}", item.Key, GetTransformPath(component.transform));
                     }
 
                     if (string.IsNullOrEmpty(description) == false)
