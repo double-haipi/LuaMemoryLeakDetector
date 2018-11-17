@@ -2,6 +2,7 @@
 using UnityEditor;
 using System.Collections;
 using System.Collections.Generic;
+using System;
 
 namespace com.tencent.pandora.tools
 {
@@ -61,6 +62,8 @@ namespace com.tencent.pandora.tools
         private Rect _instructionPosition;
 
         private string _title;
+
+        private Dictionary<IntPtr, string> _luaObjectInfo;
         #endregion
 
         [MenuItem("PandoraTools/ReferenceChecker")]
@@ -163,6 +166,8 @@ namespace com.tencent.pandora.tools
 
         private void DrawButtons()
         {
+            GUILayout.BeginVertical();
+            GUILayout.BeginHorizontal();
             if (GUILayout.Button("打开活动面板后快照", GUILayout.Height(_buttonHeight)))
             {
                 _isDisplayingFirstSnap = true;
@@ -190,6 +195,17 @@ namespace com.tencent.pandora.tools
                 _title = "";
                 Repaint();
             }
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("打开活动面板前lua 对象快照", GUILayout.Height(_buttonHeight)))
+            {
+                _luaObjectInfo = LuaObjectSnapShot.SnapShotInCSharp();
+                Debug.LogError("luaObjectNum:" + _luaObjectInfo.Count);
+                Repaint();
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
         }
 
         private void ShowIntroduction()
@@ -289,7 +305,7 @@ namespace com.tencent.pandora.tools
             EditorGUILayout.EndScrollView();
         }
 
-        private void DrawInfo(int index, string message, InfoType messageType, float topPadding = 30f)
+        private void DrawInfo( int index, string message, InfoType messageType, float topPadding = 30f )
         {
             string guiStyleName = "";
             switch (messageType)
@@ -315,7 +331,7 @@ namespace com.tencent.pandora.tools
             EditorGUIUtility.AddCursorRect(rect, MouseCursor.Text);
         }
 
-        private void DrawInfoBackground(int index, Rect rect, float topPadding = 30f)
+        private void DrawInfoBackground( int index, Rect rect, float topPadding = 30f )
         {
             if (_oddLineBackgroundTexture == null)
             {
@@ -345,7 +361,7 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        private GUIStyle GetBriefInfoStyle(string styleName)
+        private GUIStyle GetBriefInfoStyle( string styleName )
         {
             GUIStyle style = new GUIStyle(styleName);
             style.alignment = TextAnchor.UpperLeft;
@@ -414,7 +430,7 @@ namespace com.tencent.pandora.tools
             return -1;
         }
 
-        private Texture2D CreateTexture(Vector2 size, Color color)
+        private Texture2D CreateTexture( Vector2 size, Color color )
         {
             Texture2D tex = new Texture2D((int)size.x, (int)size.y);
             tex.hideFlags = HideFlags.DontSave;

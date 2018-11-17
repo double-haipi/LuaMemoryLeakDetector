@@ -25,6 +25,8 @@ namespace com.tencent.pandora.tools
         private const int USERDATA = 4;
         private const int MARK = 5;
 
+        //private static int total = 0;
+        //private static int totalMax = 100;
 
         public static Dictionary<IntPtr, string> SnapShotInCSharp()
         {
@@ -32,7 +34,7 @@ namespace com.tencent.pandora.tools
             if (sluaSvrGameObject == null)
             {
                 ReferenceChecker.DisplayWarningDialog("lua 虚拟机还未运行,请先运行工程");
-                return null;
+                return new Dictionary<IntPtr, string>();
             }
             IntPtr luaState = sluaSvrGameObject.GetComponent<LuaSvrGameObject>().state.L;
             IntPtr dumpLuaState = LuaDLL.puaL_newstate();
@@ -41,6 +43,7 @@ namespace com.tencent.pandora.tools
                 LuaDLL.pua_newtable(dumpLuaState);
             }
             LuaDLL.pua_pushvalue(luaState, LuaIndexes.LUA_REGISTRYINDEX);
+
             MarkTable(luaState, dumpLuaState, IntPtr.Zero, "[registry]");
             GenResult(luaState, dumpLuaState);
             LuaDLL.pua_close(dumpLuaState);
@@ -77,7 +80,6 @@ namespace com.tencent.pandora.tools
             IntPtr tablePointer = ReadObject(luaState, dumpLuaState, parent, description);
             if (tablePointer == IntPtr.Zero)
             {
-                //感觉这里会导致栈不平衡，没有弹出不做标记的元素，后面要测试下栈顶位置。
                 return;
             }
 
@@ -103,14 +105,18 @@ namespace com.tencent.pandora.tools
                 }
                 LuaDLL.pua_pop(luaState, 1);
                 //扩展栈
-                if (LuaDLL.pua_checkstack(luaState, LUA_MINSTACK))
-                {
-                    MarkTable(luaState, dumpLuaState, tablePointer, "[metatable]");
-                }
-                else
-                {
-                    Debug.LogWarning(string.Format("不能保证｛0｝luaState 栈上还有空余的{1}个槽", luaState, LUA_MINSTACK));
-                }
+                LuaDLL.pua_checkstack(luaState, LUA_MINSTACK);
+                MarkTable(luaState, dumpLuaState, tablePointer, "[metatable]");
+
+                //if (LuaDLL.pua_checkstack(luaState, LUA_MINSTACK))
+                //{
+                //    MarkTable(luaState, dumpLuaState, tablePointer, "[metatable]");
+                //}
+                //else
+                //{
+                //    Debug.LogWarning(string.Format("不能保证｛0｝luaState 栈上还有空余的{1}个槽", luaState, LUA_MINSTACK));
+                //}
+
             }
 
             //遍历table
@@ -143,6 +149,11 @@ namespace com.tencent.pandora.tools
         //记录形式:以Table为例,其中一条记录为 pointer = {parent = description},每条记录记录其指针,父指针和描述.
         static IntPtr ReadObject( IntPtr luaState, IntPtr dumpLuaState, IntPtr parent, string description )
         {
+            //total++;
+            //if (total > totalMax)
+            //{
+            //    return IntPtr.Zero;
+            //}
             LuaTypes t = LuaDLL.pua_type(luaState, -1);
             int tableIndex = 0;
             switch (t)
@@ -192,7 +203,7 @@ namespace com.tencent.pandora.tools
             RawGet(dumpLuaState, MARK, pointer);
             if (LuaDLL.pua_isnil(dumpLuaState, -1))
             {
-                LuaDLL.pua_pop(dumpLuaState, -1);
+                LuaDLL.pua_pop(dumpLuaState, 1);
                 LuaDLL.pua_pushboolean(dumpLuaState, true);
                 RawSet(dumpLuaState, MARK, pointer);
                 return false;
@@ -242,7 +253,7 @@ namespace com.tencent.pandora.tools
                     keyDescription = LuaDLL.pua_tostring(luaState, index);
                     break;
                 default:
-                    keyDescription = string.Format("[{0}:{1}]", LuaDLL.pua_typenamestr(luaState, keyType), LuaDLL.pua_topointer(luaState, index));
+                    keyDescription = string.Format("[{0}]", LuaDLL.pua_typenamestr(luaState, keyType));
                     break;
             }
 
@@ -306,7 +317,7 @@ namespace com.tencent.pandora.tools
                     LuaDLL.pua_pushnil(dumpLuaState);
                     RawSet(dumpLuaState, FUNCTION, functionPointer);
                 }
-                LuaDLL.pua_pop(luaState, 1);
+                //LuaDLL.pua_pop(luaState, 1);
             }
             else
             {
@@ -318,6 +329,8 @@ namespace com.tencent.pandora.tools
                 LuaDLL.pua_pushstring(dumpLuaState, functionDescrition);
                 RawSet(dumpLuaState, SOURCE, functionPointer);
             }
+            //把pop操作移动到此
+            LuaDLL.pua_pop(luaState, 1);
         }
 
         static void MarkFunctionEnvironment( IntPtr luaState, IntPtr dumpLuaState, IntPtr parent )
@@ -428,6 +441,34 @@ namespace com.tencent.pandora.tools
                 LuaDLL.pua_pushstring(luaState, sb.ToString());
                 RawSet(luaState, -2, key);
                 LuaDLL.pua_pop(dumpLuaState, 1);
+            }
+        }
+
+        private static void StackDump( IntPtr statePointer, string descriptionHead )
+        {
+            int top = LuaDLL.pua_gettop(statePointer);
+            Logger.LogWarning(descriptionHead + "栈顶:" + top.ToString());
+            for (int i = 0; i < top; i++)
+            {
+                string info = "";
+                LuaTypes luaType = LuaDLL.pua_type(statePointer, i + 1);
+
+                switch (luaType)
+                {
+                    case LuaTypes.LUA_TBOOLEAN:
+                        info = string.Format("type:{0},value:{1}", LuaDLL.pua_typenamestr(statePointer, luaType), LuaDLL.pua_toboolean(statePointer, i));
+                        break;
+                    case LuaTypes.LUA_TNUMBER:
+                        info = string.Format("type:{0},value:{1}", LuaDLL.pua_typenamestr(statePointer, luaType), LuaDLL.pua_tonumber(statePointer, i));
+                        break;
+                    case LuaTypes.LUA_TSTRING:
+                        info = string.Format("type:{0},value:{1}", LuaDLL.pua_typenamestr(statePointer, luaType), LuaDLL.pua_tostring(statePointer, i));
+                        break;
+                    default:
+                        info = string.Format("type:{0},value:{1}", LuaDLL.pua_typenamestr(statePointer, luaType), "");
+                        break;
+                }
+                Logger.Log(descriptionHead + info);
             }
         }
     }
