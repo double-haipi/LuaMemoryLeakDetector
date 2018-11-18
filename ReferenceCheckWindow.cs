@@ -63,7 +63,8 @@ namespace com.tencent.pandora.tools
 
         private string _title;
 
-        private Dictionary<IntPtr, string> _luaObjectInfo;
+        private Dictionary<IntPtr, string> _lastLuaObjectInfo;
+        private Dictionary<IntPtr, string> _currentLuaObjectInfo;
         #endregion
 
         [MenuItem("PandoraTools/ReferenceChecker")]
@@ -102,7 +103,7 @@ namespace com.tencent.pandora.tools
             EditorGUILayout.BeginVertical();
             InitInfoScrollViewArea();
             DrawHeader();
-            GUILayout.Space(_headerHeight - _buttonHeight);
+            GUILayout.Space(_headerHeight - _buttonHeight * 2);
             DrawTitle();
             DrawSegmentingLine();
             OnMouseEvent();
@@ -200,9 +201,30 @@ namespace com.tencent.pandora.tools
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("打开活动面板前lua 对象快照", GUILayout.Height(_buttonHeight)))
             {
-                _luaObjectInfo = LuaObjectSnapShot.SnapShotInCSharp();
-                Debug.LogError("luaObjectNum:" + _luaObjectInfo.Count);
-                Repaint();
+                _lastLuaObjectInfo = LuaObjectSnapShot.SnapShotInCSharp();
+            }
+
+            if (GUILayout.Button("关闭活动面板后lua 对象快照", GUILayout.Height(_buttonHeight)))
+            {
+                _isDisplayingFirstSnap = false;
+                EditorPrefs.SetBool(_isDisplayingFirstSnapKey, false);
+                _currentLuaObjectInfo = LuaObjectSnapShot.SnapShotInCSharp();
+                if (_lastLuaObjectInfo != null)
+                {
+                    //对比
+                    _referenceInfo.Clear();
+                    foreach (var item in _currentLuaObjectInfo)
+                    {
+                        if (_lastLuaObjectInfo.ContainsKey(item.Key) == false)
+                        {
+                            _referenceInfo.Add(string.Format("Pointer:{0},Descrition:{1}", item.Key, item.Value));
+                        }
+                    }
+
+                    _title = "以下是 lua 对象泄漏项：";
+                    Repaint();
+                    _lastLuaObjectInfo = _currentLuaObjectInfo;
+                }
             }
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
@@ -299,7 +321,7 @@ namespace com.tencent.pandora.tools
             int length = _referenceInfo.Count;
             for (int i = 0; i < length; i++)
             {
-                DrawInfo(i, _referenceInfo[i].Substring(0, _referenceInfo[i].IndexOf("\r\n")), type);
+                DrawInfo(i, _referenceInfo[i].Substring(0, _referenceInfo[i].IndexOf("\n")), type);
             }
             GUILayout.Space(length * _infoLineHeight);
             EditorGUILayout.EndScrollView();

@@ -310,7 +310,7 @@ namespace com.tencent.pandora.tools
             LuaDebug luaDebugInfo = new LuaDebug();
             //lua_getinfo 会把函数弹出
 
-            LuaDLL.pua_getinfo(luaState, ">S", ref luaDebugInfo);
+            //LuaDLL.pua_getinfo(luaState, ">l", ref luaDebugInfo);
             //这里可能会生成很多字符串,注意看内存
             //string functionDescrition = string.Format("{0}:{1}", new string(luaDebugInfo.shortSource), luaDebugInfo.lineDefined);
             //LuaDLL.pua_pushstring(dumpLuaState, functionDescrition);
