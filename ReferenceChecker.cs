@@ -92,7 +92,7 @@ namespace com.tencent.pandora.tools
             return luaStatePointer;
         }
 
-        private Type FindType(string typeName)
+        private Type FindType( string typeName )
         {
             Type type = Type.GetType(typeName);
 
@@ -116,7 +116,7 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        private void SetReferenceDescription(Dictionary<object, int> referenceData, ref Dictionary<int, string> referenceDescriptionMap)
+        private void SetReferenceDescription( Dictionary<object, int> referenceData, ref Dictionary<int, string> referenceDescriptionMap )
         {
             referenceDescriptionMap.Clear();
             GameObject go = null;
@@ -165,7 +165,7 @@ namespace com.tencent.pandora.tools
             LuaDLL.pua_gc((IntPtr)luaStatePointer, LuaGCOptions.LUA_GCCOLLECT, 0);
         }
 
-        private void UpdateReferenceDescription(Dictionary<object, int> referenceData, ref Dictionary<int, string> referenceDescriptionMap)
+        private void UpdateReferenceDescription( Dictionary<object, int> referenceData, ref Dictionary<int, string> referenceDescriptionMap )
         {
             Dictionary<int, string> newMap = new Dictionary<int, string>();
             string description = "";
@@ -181,7 +181,7 @@ namespace com.tencent.pandora.tools
 
 
         //path 是相对于活动面板的，把UI Root，Canvas 头去掉。
-        private string GetTransformPath(Transform trans)
+        private string GetTransformPath( Transform trans )
         {
             if (trans == null)
             {
@@ -220,7 +220,7 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        public static void DisplayWarningDialog(string message, string title = "")
+        public static void DisplayWarningDialog( string message, string title = "" )
         {
             EditorUtility.DisplayDialog(title, message, "我知道了");
         }

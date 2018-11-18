@@ -307,11 +307,10 @@ namespace com.tencent.pandora.tools
                 MarkObject(luaState, dumpLuaState, functionPointer, name != "" ? name : "[upvalue]");
             }
 
-            //LuaDebug luaDebugInfo = new LuaDebug();
-            //StackDump(luaState, "markFuntion-before get info");
+            LuaDebug luaDebugInfo = new LuaDebug();
             //lua_getinfo 会把函数弹出
-            //LuaDLL.pua_getinfo(luaState, ">S", ref luaDebugInfo);
-            //StackDump(luaState, "markFuntion-before after info");
+
+            LuaDLL.pua_getinfo(luaState, ">S", ref luaDebugInfo);
             //这里可能会生成很多字符串,注意看内存
             //string functionDescrition = string.Format("{0}:{1}", new string(luaDebugInfo.shortSource), luaDebugInfo.lineDefined);
             //LuaDLL.pua_pushstring(dumpLuaState, functionDescrition);
