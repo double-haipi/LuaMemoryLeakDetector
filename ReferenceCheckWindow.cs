@@ -90,8 +90,6 @@ namespace com.tencent.pandora.tools
             _detailInfoStyle.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
             _detailInfoStyle.fontSize = _detailInfoFontSize;
 
-
-
             _instructionPosition = new Rect(0, 0, 320, _headerHeight);
         }
 
@@ -205,17 +203,16 @@ namespace com.tencent.pandora.tools
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("打开活动面板前lua 对象快照", GUILayout.Height(_buttonHeight)))
             {
-                _lastLuaObjectInfo = LuaObjectSnapShot.SnapShotInCSharp();
+                _lastLuaObjectInfo = LuaObjectSnapShot.Snapshot();
             }
 
             if (GUILayout.Button("关闭活动面板后lua 对象快照", GUILayout.Height(_buttonHeight)))
             {
                 _isDisplayingFirstSnap = false;
                 EditorPrefs.SetBool(_isDisplayingFirstSnapKey, false);
-                _currentLuaObjectInfo = LuaObjectSnapShot.SnapShotInCSharp();
+                _currentLuaObjectInfo = LuaObjectSnapShot.Snapshot();
                 if (_lastLuaObjectInfo != null)
                 {
-                    //对比
                     _leakedLuaObjectInfo.Clear();
                     foreach (var item in _currentLuaObjectInfo)
                     {
