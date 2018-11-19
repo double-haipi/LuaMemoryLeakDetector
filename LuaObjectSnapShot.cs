@@ -12,7 +12,7 @@ using System.Collections.Generic;
 
 namespace com.tencent.pandora.tools
 {
-    public class LuaObjectSnapShot
+    public class LuaObjectSnapshot
     {
         private static int LUA_MINSTACK = 20;
 

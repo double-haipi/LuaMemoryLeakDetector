@@ -203,14 +203,14 @@ namespace com.tencent.pandora.tools
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("打开活动面板前lua 对象快照", GUILayout.Height(_buttonHeight)))
             {
-                _lastLuaObjectInfo = LuaObjectSnapShot.Snapshot();
+                _lastLuaObjectInfo = LuaObjectSnapshot.Snapshot();
             }
 
             if (GUILayout.Button("关闭活动面板后lua 对象快照", GUILayout.Height(_buttonHeight)))
             {
                 _isDisplayingFirstSnap = false;
                 EditorPrefs.SetBool(_isDisplayingFirstSnapKey, false);
-                _currentLuaObjectInfo = LuaObjectSnapShot.Snapshot();
+                _currentLuaObjectInfo = LuaObjectSnapshot.Snapshot();
                 if (_lastLuaObjectInfo != null)
                 {
                     _leakedLuaObjectInfo.Clear();
