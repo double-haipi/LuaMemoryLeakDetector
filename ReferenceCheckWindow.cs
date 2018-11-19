@@ -3,6 +3,7 @@ using UnityEditor;
 using System.Collections;
 using System.Collections.Generic;
 using System;
+using System.Text;
 
 namespace com.tencent.pandora.tools
 {
@@ -33,6 +34,7 @@ namespace com.tencent.pandora.tools
 
         private GUIStyle _detailInfoStyle;
         private int _detailInfoFontSize = 12;
+        private string _detailInfo = "";
         private GUIStyle _briefInfoStyle;
         private int _briefInfoFontSize = 12;
         GUIStyle instructionStyle;
@@ -65,6 +67,7 @@ namespace com.tencent.pandora.tools
 
         private Dictionary<IntPtr, string> _lastLuaObjectInfo;
         private Dictionary<IntPtr, string> _currentLuaObjectInfo;
+        private Dictionary<IntPtr, string> _leakedLuaObjectInfo = new Dictionary<IntPtr, string>();
         #endregion
 
         [MenuItem("PandoraTools/ReferenceChecker")]
@@ -194,6 +197,7 @@ namespace com.tencent.pandora.tools
                 _referenceDescriptionMap.Clear();
                 _referenceInfo.Clear();
                 _title = "";
+                _detailInfo = "";
                 Repaint();
             }
             GUILayout.EndHorizontal();
@@ -212,22 +216,73 @@ namespace com.tencent.pandora.tools
                 if (_lastLuaObjectInfo != null)
                 {
                     //对比
-                    _referenceInfo.Clear();
+                    _leakedLuaObjectInfo.Clear();
                     foreach (var item in _currentLuaObjectInfo)
                     {
                         if (_lastLuaObjectInfo.ContainsKey(item.Key) == false)
                         {
-                            _referenceInfo.Add(string.Format("Pointer:{0},Descrition:{1}", item.Key, item.Value));
+                            _leakedLuaObjectInfo.Add(item.Key, item.Value);
                         }
                     }
-
+                    //处理数据
+                    FillReferenceInfoByLuaObjectSnapshot();
                     _title = "以下是 lua 对象泄漏项：";
-                    Repaint();
+                    _lastLuaObjectInfo.Clear();
                     _lastLuaObjectInfo = _currentLuaObjectInfo;
                 }
             }
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
+        }
+
+        private void FillReferenceInfoByLuaObjectSnapshot()
+        {
+            _referenceInfo.Clear();
+            foreach (var item in _leakedLuaObjectInfo)
+            {
+                string[] objInfo = GetSplitInfo(item.Value);
+                StringBuilder sb = new StringBuilder(512);
+                int depth = 0;
+                GetReferenceChain(item.Key.ToString(), ref sb, ref depth);
+                string referenceChain = "";
+                if (sb.Length > 2)
+                {
+                    referenceChain = sb.ToString(2, sb.Length - 2);
+                }
+                sb = null;
+                _referenceInfo.Add(string.Format("ObjInfo：\t{0}({1})\nReference Chain:\t{2}", objInfo[2], objInfo[0], referenceChain));
+            }
+            Repaint();
+        }
+
+        //返回内容： typeName,parentPtr,desc,""
+        private string[] GetSplitInfo(string origin)
+        {
+            return origin.Split(new char[] { '\n', ':' });
+        }
+
+        private void GetReferenceChain(string parentPointer, ref StringBuilder sb, ref int depth)
+        {
+            //控制迭代层数，不需太多链，太多会导致内存占用过大把unity卡死
+            if (depth > 6)
+            {
+                return;
+            }
+            IntPtr pointer = (IntPtr)(Convert.ToInt32(parentPointer));
+            if (pointer == IntPtr.Zero)
+            {
+                return;
+            }
+            if (_currentLuaObjectInfo.ContainsKey(pointer) == false)
+            {
+                return;
+            }
+            string[] infos = GetSplitInfo(_currentLuaObjectInfo[pointer]);
+            string insertContent = string.Format("{0}({1})", infos[2], infos[0]);
+            sb.Insert(0, insertContent);
+            sb.Insert(0, "->");
+            depth++;
+            GetReferenceChain(infos[1], ref sb, ref depth);
         }
 
         private void ShowIntroduction()
@@ -327,7 +382,7 @@ namespace com.tencent.pandora.tools
             EditorGUILayout.EndScrollView();
         }
 
-        private void DrawInfo( int index, string message, InfoType messageType, float topPadding = 30f )
+        private void DrawInfo(int index, string message, InfoType messageType, float topPadding = 30f)
         {
             string guiStyleName = "";
             switch (messageType)
@@ -353,7 +408,7 @@ namespace com.tencent.pandora.tools
             EditorGUIUtility.AddCursorRect(rect, MouseCursor.Text);
         }
 
-        private void DrawInfoBackground( int index, Rect rect, float topPadding = 30f )
+        private void DrawInfoBackground(int index, Rect rect, float topPadding = 30f)
         {
             if (_oddLineBackgroundTexture == null)
             {
@@ -383,7 +438,7 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        private GUIStyle GetBriefInfoStyle( string styleName )
+        private GUIStyle GetBriefInfoStyle(string styleName)
         {
             GUIStyle style = new GUIStyle(styleName);
             style.alignment = TextAnchor.UpperLeft;
@@ -396,14 +451,14 @@ namespace com.tencent.pandora.tools
         private void DrawDetailInfoArea()
         {
             _detailInfoScrollPosition = EditorGUILayout.BeginScrollView(_detailInfoScrollPosition, GUILayout.Height(_detailInfoScrollViewHeight));
+
+            _detailInfo = "";
             if (-1 < _selectedInfoIndex && _selectedInfoIndex < _referenceInfo.Count)
             {
-                EditorGUILayout.TextArea(_referenceInfo[_selectedInfoIndex], _detailInfoStyle);
+                _detailInfo = _referenceInfo[_selectedInfoIndex];
             }
-            else
-            {
-                EditorGUILayout.TextArea("", _detailInfoStyle);
-            }
+
+            EditorGUILayout.TextArea(_detailInfo, _detailInfoStyle);
 
             //加两个空行
             EditorGUILayout.LabelField("");
@@ -417,6 +472,9 @@ namespace com.tencent.pandora.tools
             if (_selectedInfoIndex != index && index != -1)
             {
                 _selectedInfoIndex = index;
+                //如果选中了详情区的TextArea，需要移除焦点，否则更新不了TextArea
+                GUIUtility.keyboardControl = 0;
+                GUIUtility.hotControl = 0;
                 //如果需要立马重绘界面，就调用Repaint
                 Repaint();
             }
@@ -452,7 +510,7 @@ namespace com.tencent.pandora.tools
             return -1;
         }
 
-        private Texture2D CreateTexture( Vector2 size, Color color )
+        private Texture2D CreateTexture(Vector2 size, Color color)
         {
             Texture2D tex = new Texture2D((int)size.x, (int)size.y);
             tex.hideFlags = HideFlags.DontSave;
