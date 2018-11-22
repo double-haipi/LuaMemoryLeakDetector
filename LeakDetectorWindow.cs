@@ -9,13 +9,6 @@ namespace com.tencent.pandora.tools
 {
     public class LeakDetectorWindow : EditorWindow
     {
-        enum InfoType
-        {
-            Info,
-            Warn,
-            Error,
-        }
-
         #region 参数
         private int _instructionHeight = 80;
         private int _defaultPadding = 4;
@@ -27,12 +20,20 @@ namespace com.tencent.pandora.tools
         private bool _needInitScrollViewArea = false;
 
         private Vector2 _windowSize = Vector2.zero;
-        private Vector2 _briefInfoScrollPosition = Vector2.zero;
-        private Vector2 _detailInfoScrollPosition = Vector2.zero;
-        private float _briefInfoScrollViewHeight;
-        private float _detailInfoScrollViewHeight;
+        private Vector2 _csharpAreaScrollPosition = Vector2.zero;
+        private Vector2 _luaAreaScrollPosition = Vector2.zero;
+        private Vector2 _detailAreaScrollPosition = Vector2.zero;
 
+        private float _csharpAreaScrollViewHeight;
+        private float _luaAreaScrollViewHeight;
+        private float _detailAreaScrollViewHeight;
+
+        private int _selectedArea = -1;
         private int _selectedInfoIndex = -1;
+        private int _newSelectedArea = -1;
+        private int _newSelectedInfoIndex = -1;
+
+
 
         private GUIStyle _detailInfoStyle;
         private int _detailInfoFontSize = 12;
@@ -41,7 +42,12 @@ namespace com.tencent.pandora.tools
         private int _briefInfoFontSize = 12;
         GUIStyle instructionStyle;
 
-        private Rect _segmentingLineRect;
+
+        private Rect _segmentingLineRect1;
+        private Rect _segmentingLineRect2;
+        float yPostionOfSegmentLine1;
+        float yPostionOfSegmentLine2;
+
         private bool _segmentingLineMove = false;
         private float _segmentingLinePositonToWindowHeightRatio;
         private string _segmentingLineRatioKey = "SEGMENTING_LINE_RATIO";
@@ -57,21 +63,18 @@ namespace com.tencent.pandora.tools
         private Texture2D _selectedLineBackoundTexture;
 
         private Dictionary<int, string> _referenceDescriptionMap = new Dictionary<int, string>();
-        private List<string> _referenceInfo = new List<string>();
+        private List<string> _csharpObjectLeakInfo = new List<string>();
+        private List<string> _luaObjectLeakInfo = new List<string>();
 
-        private bool _isDisplayingFirstSnap = true;
         private string _isDisplayingFirstSnapKey = "IS_DISPLAYING_FIRST_SNAP";
 
         private string _content = "说明：\n1.打开待检测活动面板，对面板做全面交互操作。\n2.点击'打开活动面板后-记录',对内存中对象做第一次快照。\n3.关闭活动面板，但保持工程处于运行中，点击'关闭活动面板后-检查'，显示区显示的即为未释放对象。";
-        private Rect _instructionPosition;
 
         private string _title;
         private string _csharpLeakTitle = "以下是c#泄漏项：";
         private string _luaLeakTitle = "以下是lua泄漏项：";
 
-        private Dictionary<IntPtr, string> _lastLuaObjectInfo;
-        private Dictionary<IntPtr, string> _currentLuaObjectInfo;
-        private Dictionary<IntPtr, string> _leakedLuaObjectInfo = new Dictionary<IntPtr, string>();
+
         #endregion
 
         [MenuItem("PandoraTools/ActionMemoryLeakDetector")]
@@ -82,11 +85,6 @@ namespace com.tencent.pandora.tools
 
         private void OnEnable()
         {
-            //每次获取到焦点时初始化一次
-            _needInitScrollViewArea = true;
-
-            _isDisplayingFirstSnap = EditorPrefs.GetBool(_isDisplayingFirstSnapKey, true);
-
             _detailInfoStyle = new GUIStyle();
             _detailInfoStyle.alignment = TextAnchor.UpperLeft;
             _detailInfoStyle.padding = new RectOffset(2, 2, 2, 2);
@@ -94,78 +92,55 @@ namespace com.tencent.pandora.tools
             _detailInfoStyle.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
             _detailInfoStyle.fontSize = _detailInfoFontSize;
 
-            _instructionPosition = new Rect(0, 0, 320, _headerHeight);
-        }
-
-        private void OnLostFocus()
-        {
-            //记录segmentingLineRatio
-            EditorPrefs.SetFloat(_segmentingLineRatioKey, _segmentingLinePositonToWindowHeightRatio);
         }
 
         public void OnGUI()
         {
             EditorGUILayout.BeginVertical();
-            SetCurrentWindow();
+            RefreshWindowSize();
+            RefreshScrollViewArea();
             ShowIntroduction();
             GUILayout.Space(_instructionHeight + _defaultPadding);
             DrawButtons();
-            InitInfoScrollViewArea();
-            DrawTitle();
+            DrawScharpArea();
             DrawSegmentingLine();
+            DrawLuaArea();
+            DrawDetailArea();
             OnMouseEvent();
-            OnScreenHeightResize();
-            RefreshInfoScrollViewArea();
-            DrawBriefInfoArea();
-            DrawDetailInfoArea();
             OnInfoClick();
             EditorGUILayout.EndVertical();
         }
 
-        private void InitInfoScrollViewArea()
+        private void SetScrollViewArea()
         {
-            if (_needInitScrollViewArea == false)
+            float remainedSpace = _windowSize.y - _instructionHeight - _buttonHeight - 2 * _defaultPadding;
+            float oneFifthSpace = remainedSpace / 5.0f;
+
+            _csharpAreaScrollViewHeight = oneFifthSpace * 2.0f - _titleHeight;
+            _luaAreaScrollViewHeight = _csharpAreaScrollViewHeight;
+            _detailAreaScrollViewHeight = oneFifthSpace;
+
+            yPostionOfSegmentLine1 = _instructionHeight + _buttonHeight + _defaultPadding + oneFifthSpace * 2.0f;
+            yPostionOfSegmentLine2 = yPostionOfSegmentLine1 + oneFifthSpace * 2.0f;
+
+
+            if (_segmentingLineRect1 == null)
             {
-                return;
+                _segmentingLineRect1 = new Rect(0, yPostionOfSegmentLine1, Screen.width, 1f);
             }
             else
             {
-                _segmentingLinePositonToWindowHeightRatio = EditorPrefs.GetFloat(_segmentingLineRatioKey, 0.5f);
-                SetInfoScrollViewArea();
-                _needInitScrollViewArea = false;
+                _segmentingLineRect1.Set(0, yPostionOfSegmentLine1, Screen.width, 1f);
             }
-        }
 
-        private void SetInfoScrollViewArea()
-        {
-            float screenHeight = Screen.height;
-            float ySegmentingLinePosition = screenHeight * _segmentingLinePositonToWindowHeightRatio;
-
-            _briefInfoScrollViewHeight = ySegmentingLinePosition - _headerHeight - _titleHeight - _defaultPadding;
-            _detailInfoScrollViewHeight = screenHeight - ySegmentingLinePosition - _defaultPadding;
-
-            if (_segmentingLineRect == null)
+            if (_segmentingLineRect2 == null)
             {
-                _segmentingLineRect = new Rect(0, ySegmentingLinePosition, Screen.width, 1f);
+                _segmentingLineRect2 = new Rect(0, yPostionOfSegmentLine1, Screen.width, 1f);
             }
             else
             {
-                _segmentingLineRect.Set(0, ySegmentingLinePosition, Screen.width, 1f);
+                _segmentingLineRect2.Set(0, yPostionOfSegmentLine1, Screen.width, 1f);
             }
-
-            if (_cursorRect == null)
-            {
-                _cursorRect = new Rect(0, _segmentingLineRect.y - _cursorRectWidth / 2, Screen.width, _cursorRectWidth);
-            }
-            else
-            {
-                _cursorRect.Set(0, _segmentingLineRect.y - _cursorRectWidth / 2, Screen.width, _cursorRectWidth);
-            }
-        }
-
-        private void DrawHeader()
-        {
-
         }
 
         private void DrawButtons()
@@ -186,7 +161,7 @@ namespace com.tencent.pandora.tools
             if (GUILayout.Button("清空显示", GUILayout.Height(_buttonHeight)))
             {
                 _referenceDescriptionMap.Clear();
-                _referenceInfo.Clear();
+                _csharpObjectLeakInfo.Clear();
                 _detailInfo = "";
                 Repaint();
             }
@@ -204,20 +179,20 @@ namespace com.tencent.pandora.tools
             GUI.Box(new Rect(_defaultPadding, 0, _windowSize.x - 2 * _defaultPadding, _instructionHeight), _content, instructionStyle);
         }
 
-        private void DrawTitle()
+        private void DrawTitle( string content )
         {
             Color originalColor = _detailInfoStyle.normal.textColor;
             _detailInfoStyle.normal.textColor = new Color(0f, 1f, 0f, 1f);
-            GUILayout.Label(_title, _detailInfoStyle, GUILayout.Height(_titleHeight));
+            GUILayout.Label(content, _detailInfoStyle, GUILayout.Height(_titleHeight));
             _detailInfoStyle.normal.textColor = originalColor;
         }
 
         private void FillReferenceInfo()
         {
-            _referenceInfo.Clear();
+            _csharpObjectLeakInfo.Clear();
             foreach (var item in _referenceDescriptionMap)
             {
-                _referenceInfo.Add(item.Value);
+                _csharpObjectLeakInfo.Add(item.Value);
             }
             Repaint();
         }
@@ -229,8 +204,8 @@ namespace com.tencent.pandora.tools
                 _segmentingLineTexture = CreateTexture(Vector2.one, Color.black);
             }
 
-            GUI.DrawTexture(_segmentingLineRect, _segmentingLineTexture);
-            EditorGUIUtility.AddCursorRect(_cursorRect, MouseCursor.ResizeVertical);
+            GUI.DrawTexture(_segmentingLineRect1, _segmentingLineTexture);
+            GUI.DrawTexture(_segmentingLineRect2, _segmentingLineTexture);
         }
 
         private void OnMouseEvent()
@@ -247,11 +222,12 @@ namespace com.tencent.pandora.tools
         }
 
 
-        private void OnScreenHeightResize()
+        private void RefreshWindowSize()
         {
-            if (_lastWindowHeight != Screen.height)
+            if (_windowSize.x != Screen.width || _windowSize.y != Screen.height)
             {
-                _lastWindowHeight = Screen.height;
+                _windowSize.x = Screen.width;
+                _windowSize.y = Screen.height;
                 _windowResize = true;
             }
             else
@@ -260,69 +236,51 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        private void SetCurrentWindow()
+        private void RefreshScrollViewArea()
         {
-            _windowSize.x = Screen.width;
-            _windowSize.y = Screen.height;
-        }
-
-        private void RefreshInfoScrollViewArea()
-        {
-            //只有分割线移动时计算radio,窗口变动不计算
-            if (_segmentingLineMove == true)
+            if (_windowResize == true)
             {
-                _segmentingLinePositonToWindowHeightRatio = Event.current.mousePosition.y / Screen.height;
-
-            }
-            if (_segmentingLineMove == true || _windowResize == true)
-            {
-                SetInfoScrollViewArea();
+                SetScrollViewArea();
                 Repaint();
             }
         }
 
-        private void DrawBriefInfoArea()
+        private void DrawScharpArea()
         {
-            _briefInfoScrollPosition = EditorGUILayout.BeginScrollView(_briefInfoScrollPosition, GUILayout.Height(_briefInfoScrollViewHeight));
-
-            InfoType type = (_isDisplayingFirstSnap == true ? InfoType.Info : InfoType.Warn);
-
-            int length = _referenceInfo.Count;
+            _csharpAreaScrollPosition = EditorGUILayout.BeginScrollView(_csharpAreaScrollPosition, GUILayout.Height(_csharpAreaScrollViewHeight));
+            int length = _csharpObjectLeakInfo.Count;
             for (int i = 0; i < length; i++)
             {
-                DrawInfo(i, _referenceInfo[i].Substring(0, _referenceInfo[i].IndexOf("\n")), type);
+                DrawInfo(i, _csharpObjectLeakInfo[i].Substring(0, _csharpObjectLeakInfo[i].IndexOf("\n")));
             }
             GUILayout.Space(length * _infoLineHeight);
             EditorGUILayout.EndScrollView();
         }
 
-        private void DrawInfo(int index, string message, InfoType messageType, float topPadding = 30f)
+        private void DrawLuaArea()
         {
-            string guiStyleName = "";
-            switch (messageType)
+            _luaAreaScrollPosition = EditorGUILayout.BeginScrollView(_luaAreaScrollPosition, GUILayout.Height(_luaAreaScrollViewHeight));
+            int length = _luaObjectLeakInfo.Count;
+            for (int i = 0; i < length; i++)
             {
-                case InfoType.Info:
-                    guiStyleName = "CN EntryInfo";
-                    break;
-                case InfoType.Warn:
-                    guiStyleName = "CN EntryWarn";
-                    break;
-                case InfoType.Error:
-                    guiStyleName = "CN EntryError";
-                    break;
-                default:
-                    break;
+                DrawInfo(i, _luaObjectLeakInfo[i].Substring(0, _luaObjectLeakInfo[i].IndexOf("\n")));
             }
+            GUILayout.Space(length * _infoLineHeight);
+            EditorGUILayout.EndScrollView();
+        }
 
+        //这个地方的绘制可能要修改
+        private void DrawInfo( int index, string message )
+        {
             Rect rect = new Rect(0, index * _infoLineHeight, Screen.width - 18f, _infoLineHeight);
             DrawInfoBackground(index, rect);
-            _briefInfoStyle = GetBriefInfoStyle(guiStyleName);
+            _briefInfoStyle = GetBriefInfoStyle("CN EntryWarn");
             GUI.Label(rect, message, _briefInfoStyle);
             //添加cursorRect
             EditorGUIUtility.AddCursorRect(rect, MouseCursor.Text);
         }
 
-        private void DrawInfoBackground(int index, Rect rect, float topPadding = 30f)
+        private void DrawInfoBackground( int index, Rect rect, float topPadding = 30f )
         {
             if (_oddLineBackgroundTexture == null)
             {
@@ -352,7 +310,7 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        private GUIStyle GetBriefInfoStyle(string styleName)
+        private GUIStyle GetBriefInfoStyle( string styleName )
         {
             GUIStyle style = new GUIStyle(styleName);
             style.alignment = TextAnchor.UpperLeft;
@@ -362,15 +320,31 @@ namespace com.tencent.pandora.tools
             return style;
         }
 
-        private void DrawDetailInfoArea()
+        private void DrawDetailArea()
         {
-            _detailInfoScrollPosition = EditorGUILayout.BeginScrollView(_detailInfoScrollPosition, GUILayout.Height(_detailInfoScrollViewHeight));
-
-            _detailInfo = "";
-            if (-1 < _selectedInfoIndex && _selectedInfoIndex < _referenceInfo.Count)
+            if (_selectedArea == -1)
             {
-                _detailInfo = _referenceInfo[_selectedInfoIndex];
+                return;
             }
+            _detailAreaScrollPosition = EditorGUILayout.BeginScrollView(_detailAreaScrollPosition, GUILayout.Height(_detailAreaScrollViewHeight));
+            _detailInfo = "";
+
+            if (_selectedArea == 1)
+            {
+                if (-1 < _selectedInfoIndex && _selectedInfoIndex < _csharpObjectLeakInfo.Count)
+                {
+                    _detailInfo = _csharpObjectLeakInfo[_selectedInfoIndex];
+                }
+            }
+
+            if (_selectedArea == 2)
+            {
+                if (-1 < _selectedInfoIndex && _selectedInfoIndex < _luaObjectLeakInfo.Count)
+                {
+                    _detailInfo = _luaObjectLeakInfo[_selectedInfoIndex];
+                }
+            }
+
 
             EditorGUILayout.TextArea(_detailInfo, _detailInfoStyle);
 
@@ -382,49 +356,80 @@ namespace com.tencent.pandora.tools
 
         private void OnInfoClick()
         {
-            int index = GetSeletedInfoIndex();
-            if (_selectedInfoIndex != index && index != -1)
+            CalcuteSelectedTabAndIndex();
+            if (_newSelectedArea == -1 || _newSelectedInfoIndex == -1)
             {
-                _selectedInfoIndex = index;
+                return;
+            }
+            if (_newSelectedInfoIndex != _selectedInfoIndex || _newSelectedArea != _selectedArea)
+            {
+                _selectedInfoIndex = _newSelectedInfoIndex;
+                _selectedArea = _newSelectedArea;
+
                 //如果选中了详情区的TextArea，需要移除焦点，否则更新不了TextArea
                 GUIUtility.keyboardControl = 0;
                 GUIUtility.hotControl = 0;
-                //如果需要立马重绘界面，就调用Repaint
                 Repaint();
             }
         }
 
-        private int GetSeletedInfoIndex()
+        private void CalcuteSelectedTabAndIndex()
         {
             if (Event.current.type != EventType.MouseUp)
             {
-                return -1;
+                return;
             }
 
             //鼠标弹起代表一次点击
-            Vector2 currentMousePosition = Event.current.mousePosition + _briefInfoScrollPosition;
-            float height = _segmentingLinePositonToWindowHeightRatio * Screen.height + _briefInfoScrollPosition.y;
+            Vector2 originalMousePosition = Event.current.mousePosition;
+            Vector2 currentMousePositionInCsharpArea = Event.current.mousePosition + _csharpAreaScrollPosition;
+            Vector2 currentMousePositionInLuaArea = Event.current.mousePosition + _luaAreaScrollPosition;
 
-            if (currentMousePosition.y < _headerHeight + _titleHeight + _defaultPadding + _briefInfoScrollPosition.y || currentMousePosition.y > height)
+            float csharpAreaMaxHeight = yPostionOfSegmentLine1 + _csharpAreaScrollPosition.y;
+            float luaAreaMaxHeight = yPostionOfSegmentLine2 + _luaAreaScrollPosition.y;
+
+            float headPaddingForCsharpArea = _instructionHeight + _buttonHeight + _defaultPadding + _titleHeight;
+            float headPaddingForLuaArea = yPostionOfSegmentLine1 + _titleHeight;
+
+            if (originalMousePosition.y <= headPaddingForCsharpArea)
             {
-                return -1;
+                _newSelectedArea = -1;
+                _newSelectedInfoIndex = -1;
             }
+            else if (originalMousePosition.y <= yPostionOfSegmentLine1)
+            {
+                _newSelectedArea = 1;
+                _newSelectedInfoIndex = GetSelectedIndex(headPaddingForCsharpArea, csharpAreaMaxHeight, _infoLineHeight, currentMousePositionInCsharpArea);
+            }
+            else if (originalMousePosition.y <= yPostionOfSegmentLine2)
+            {
+                _newSelectedArea = 2;
+                _newSelectedInfoIndex = GetSelectedIndex(headPaddingForLuaArea, luaAreaMaxHeight, _infoLineHeight, currentMousePositionInLuaArea);
+            }
+            else
+            {
+                _newSelectedArea = -1;
+                _newSelectedInfoIndex = -1;
+            }
+        }
+
+        private int GetSelectedIndex( float min, float max, float increase, Vector2 mousePosition )
+        {
             int index = -1;
             Rect currentRect;
-            for (int y = _headerHeight + _titleHeight + _defaultPadding; y < height; y += _infoLineHeight)
+            for (int y = (int)min; y < (int)max; y += (int)increase)
             {
                 index++;
-                currentRect = new Rect(0, y, Screen.width - 18, _infoLineHeight);
-                if (currentRect.Contains(currentMousePosition) == true)
+                currentRect = new Rect(0, y, Screen.width - 18, increase);
+                if (currentRect.Contains(mousePosition) == true)
                 {
                     return index;
                 }
             }
-
             return -1;
         }
 
-        private Texture2D CreateTexture(Vector2 size, Color color)
+        private Texture2D CreateTexture( Vector2 size, Color color )
         {
             Texture2D tex = new Texture2D((int)size.x, (int)size.y);
             tex.hideFlags = HideFlags.DontSave;
