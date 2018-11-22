@@ -8,20 +8,20 @@ using System.Text;
 
 namespace com.tencent.pandora.tools
 {
-    public class ReferenceChecker
+    public class LeakDetector
     {
-        private static ReferenceChecker _instance;
+        private static LeakDetector _instance;
         private Dictionary<int, string> _referenceDescriptionMap = new Dictionary<int, string>();
         private Dictionary<object, int> _referenceDataWhenPanelOpened;
         private Dictionary<object, int> _referenceDataWhenPanelClosed;
 
-        public static ReferenceChecker Instance
+        public static LeakDetector Instance
         {
             get
             {
                 if (_instance == null)
                 {
-                    _instance = new ReferenceChecker();
+                    _instance = new LeakDetector();
                 }
                 return _instance;
             }
@@ -92,7 +92,7 @@ namespace com.tencent.pandora.tools
             return luaStatePointer;
         }
 
-        private Type FindType( string typeName )
+        private Type FindType(string typeName)
         {
             Type type = Type.GetType(typeName);
 
@@ -116,11 +116,12 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        private void SetReferenceDescription( Dictionary<object, int> referenceData, ref Dictionary<int, string> referenceDescriptionMap )
+        private void SetReferenceDescription(Dictionary<object, int> referenceData, ref Dictionary<int, string> referenceDescriptionMap)
         {
             referenceDescriptionMap.Clear();
             GameObject go = null;
             Component component = null;
+            LuaSentry sentry = null;
             string description = "";
             try
             {
@@ -134,12 +135,17 @@ namespace com.tencent.pandora.tools
                     if (item.Key is GameObject)
                     {
                         go = item.Key as GameObject;
-                        description = string.Format("ObjInfo：\t{0}\nPath In Hierarchy:\t{1}", item.Key, GetTransformPath(go.transform));
+                        description = string.Format("[C# GameObject]: {0}\nPath In Hierarchy: {1}", item.Key, GetTransformPath(go.transform));
                     }
                     else if (item.Key is Component)
                     {
                         component = item.Key as Component;
-                        description = string.Format("ObjInfo：\t{0}\nPath In Hierarchy:\t{1}", item.Key, GetTransformPath(component.transform));
+                        description = string.Format("[C# Component]: {0}\nPath In Hierarchy: {1}", item.Key, GetTransformPath(component.transform));
+                    }
+                    else if (item.Key is LuaSentry)
+                    {
+                        sentry = item.Key as LuaSentry;
+                        description = string.Format("{0}\n", sentry.ToString());
                     }
 
                     if (string.IsNullOrEmpty(description) == false)
@@ -151,7 +157,7 @@ namespace com.tencent.pandora.tools
             }
             catch (Exception)
             {
-                Debug.LogWarning("在关闭面板后，不能点击'打开活动面板后快照'");
+                Debug.LogWarning("活动面板已关闭，此按钮不能点击");
             }
         }
 
@@ -165,7 +171,7 @@ namespace com.tencent.pandora.tools
             LuaDLL.pua_gc((IntPtr)luaStatePointer, LuaGCOptions.LUA_GCCOLLECT, 0);
         }
 
-        private void UpdateReferenceDescription( Dictionary<object, int> referenceData, ref Dictionary<int, string> referenceDescriptionMap )
+        private void UpdateReferenceDescription(Dictionary<object, int> referenceData, ref Dictionary<int, string> referenceDescriptionMap)
         {
             Dictionary<int, string> newMap = new Dictionary<int, string>();
             string description = "";
@@ -181,7 +187,7 @@ namespace com.tencent.pandora.tools
 
 
         //path 是相对于活动面板的，把UI Root，Canvas 头去掉。
-        private string GetTransformPath( Transform trans )
+        private string GetTransformPath(Transform trans)
         {
             if (trans == null)
             {
@@ -220,7 +226,7 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        public static void DisplayWarningDialog( string message, string title = "" )
+        public static void DisplayWarningDialog(string message, string title = "")
         {
             EditorUtility.DisplayDialog(title, message, "我知道了");
         }

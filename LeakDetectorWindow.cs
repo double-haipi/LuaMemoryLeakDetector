@@ -7,7 +7,7 @@ using System.Text;
 
 namespace com.tencent.pandora.tools
 {
-    public class ReferenceCheckWindow : EditorWindow
+    public class LeakDetectorWindow : EditorWindow
     {
         enum InfoType
         {
@@ -70,10 +70,10 @@ namespace com.tencent.pandora.tools
         private Dictionary<IntPtr, string> _leakedLuaObjectInfo = new Dictionary<IntPtr, string>();
         #endregion
 
-        [MenuItem("PandoraTools/ReferenceChecker")]
+        [MenuItem("PandoraTools/ActionMemoryLeakDetector")]
         public static void ShowWindow()
         {
-            GetWindow<ReferenceCheckWindow>(false, "ReferenceChecker", true);
+            GetWindow<LeakDetectorWindow>(false, "ReferenceChecker", true);
         }
 
         private void OnEnable()
@@ -104,7 +104,7 @@ namespace com.tencent.pandora.tools
             EditorGUILayout.BeginVertical();
             InitInfoScrollViewArea();
             DrawHeader();
-            GUILayout.Space(_headerHeight - _buttonHeight * 2);
+            GUILayout.Space(_headerHeight - _buttonHeight);
             DrawTitle();
             DrawSegmentingLine();
             OnMouseEvent();
@@ -168,14 +168,13 @@ namespace com.tencent.pandora.tools
 
         private void DrawButtons()
         {
-            GUILayout.BeginVertical();
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("打开活动面板后快照", GUILayout.Height(_buttonHeight)))
             {
                 _isDisplayingFirstSnap = true;
                 EditorPrefs.SetBool(_isDisplayingFirstSnapKey, true);
-                ReferenceChecker.Instance.GetReferenceDataWhenPanelOpened();
-                _referenceDescriptionMap = ReferenceChecker.Instance.ReferenceDescription;
+                LeakDetector.Instance.GetReferenceDataWhenPanelOpened();
+                _referenceDescriptionMap = LeakDetector.Instance.ReferenceDescription;
                 FillReferenceInfo();
                 _title = "以下是lua引用的c#对象：";
             }
@@ -184,8 +183,8 @@ namespace com.tencent.pandora.tools
             {
                 _isDisplayingFirstSnap = false;
                 EditorPrefs.SetBool(_isDisplayingFirstSnapKey, false);
-                ReferenceChecker.Instance.GetReferenceDataWhenPanelClosed();
-                _referenceDescriptionMap = ReferenceChecker.Instance.ReferenceDescription;
+                LeakDetector.Instance.GetReferenceDataWhenPanelClosed();
+                _referenceDescriptionMap = LeakDetector.Instance.ReferenceDescription;
                 FillReferenceInfo();
                 _title = "以下是lua引用的c#对象泄漏项：";
             }
@@ -199,87 +198,6 @@ namespace com.tencent.pandora.tools
                 Repaint();
             }
             GUILayout.EndHorizontal();
-
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("打开活动面板前lua 对象快照", GUILayout.Height(_buttonHeight)))
-            {
-                _lastLuaObjectInfo = LuaObjectSnapshot.Snapshot();
-            }
-
-            if (GUILayout.Button("关闭活动面板后lua 对象快照", GUILayout.Height(_buttonHeight)))
-            {
-                _isDisplayingFirstSnap = false;
-                EditorPrefs.SetBool(_isDisplayingFirstSnapKey, false);
-                _currentLuaObjectInfo = LuaObjectSnapshot.Snapshot();
-                if (_lastLuaObjectInfo != null)
-                {
-                    _leakedLuaObjectInfo.Clear();
-                    foreach (var item in _currentLuaObjectInfo)
-                    {
-                        if (_lastLuaObjectInfo.ContainsKey(item.Key) == false)
-                        {
-                            _leakedLuaObjectInfo.Add(item.Key, item.Value);
-                        }
-                    }
-                    //处理数据
-                    FillReferenceInfoByLuaObjectSnapshot();
-                    _title = "以下是 lua 对象泄漏项：";
-                    _lastLuaObjectInfo.Clear();
-                    _lastLuaObjectInfo = _currentLuaObjectInfo;
-                }
-            }
-            GUILayout.EndHorizontal();
-            GUILayout.EndVertical();
-        }
-
-        private void FillReferenceInfoByLuaObjectSnapshot()
-        {
-            _referenceInfo.Clear();
-            foreach (var item in _leakedLuaObjectInfo)
-            {
-                string[] objInfo = GetSplitInfo(item.Value);
-                StringBuilder sb = new StringBuilder(512);
-                int depth = 0;
-                GetReferenceChain(item.Key.ToString(), ref sb, ref depth);
-                string referenceChain = "";
-                if (sb.Length > 2)
-                {
-                    referenceChain = sb.ToString(2, sb.Length - 2);
-                }
-                sb = null;
-                _referenceInfo.Add(string.Format("ObjInfo：\t{0}({1})\nReference Chain:\t{2}", objInfo[2], objInfo[0], referenceChain));
-            }
-            Repaint();
-        }
-
-        //返回内容： typeName,parentPtr,desc,""
-        private string[] GetSplitInfo(string origin)
-        {
-            return origin.Split(new char[] { '\n', ':' });
-        }
-
-        private void GetReferenceChain(string parentPointer, ref StringBuilder sb, ref int depth)
-        {
-            //控制迭代层数，不需太多链，太多会导致内存占用过大把unity卡死
-            if (depth > 6)
-            {
-                return;
-            }
-            IntPtr pointer = (IntPtr)(Convert.ToInt32(parentPointer));
-            if (pointer == IntPtr.Zero)
-            {
-                return;
-            }
-            if (_currentLuaObjectInfo.ContainsKey(pointer) == false)
-            {
-                return;
-            }
-            string[] infos = GetSplitInfo(_currentLuaObjectInfo[pointer]);
-            string insertContent = string.Format("{0}({1})", infos[2], infos[0]);
-            sb.Insert(0, insertContent);
-            sb.Insert(0, "->");
-            depth++;
-            GetReferenceChain(infos[1], ref sb, ref depth);
         }
 
         private void ShowIntroduction()
