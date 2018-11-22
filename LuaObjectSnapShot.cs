@@ -22,6 +22,8 @@ namespace com.tencent.pandora.tools
         private const int USERDATA = 4;
         private const int MARK = 5;
 
+        private static Dictionary<IntPtr, string> _snapshot;
+
         public static Dictionary<IntPtr, string> Snapshot()
         {
             var sluaSvrGameObject = GameObject.Find("LuaStateProxy_0");
@@ -42,8 +44,8 @@ namespace com.tencent.pandora.tools
             MarkTable(luaState, dumpLuaState, IntPtr.Zero, "[registry]");
             GenResult(luaState, dumpLuaState);
             LuaDLL.pua_close(dumpLuaState);
-
-            return GetSnapshot(luaState);
+            _snapshot = GetSnapshot(luaState);
+            return _snapshot;
         }
 
         static void MarkTable(IntPtr luaState, IntPtr dumpLuaState, IntPtr parent, string description)
