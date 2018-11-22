@@ -17,14 +17,16 @@ namespace com.tencent.pandora.tools
         }
 
         #region 参数
-        private int _defaultPadding = 2;
+        private int _instructionHeight = 80;
+        private int _defaultPadding = 4;
         private int _buttonHeight = 30;
-        private int _headerHeight = 120;
+        private int _headerHeight = 80;
         private int _titleHeight = 20;
         private int _infoLineHeight = 30;
 
         private bool _needInitScrollViewArea = false;
 
+        private Vector2 _windowSize = Vector2.zero;
         private Vector2 _briefInfoScrollPosition = Vector2.zero;
         private Vector2 _detailInfoScrollPosition = Vector2.zero;
         private float _briefInfoScrollViewHeight;
@@ -60,10 +62,12 @@ namespace com.tencent.pandora.tools
         private bool _isDisplayingFirstSnap = true;
         private string _isDisplayingFirstSnapKey = "IS_DISPLAYING_FIRST_SNAP";
 
-        private string _content = "说明：\r\n1.打开待检测活动面板，对面板做全面交互操作。\r\n 2.点击'打开活动面板后快照',对引用关系做第一次快照。\r\n 3.关闭活动面板，但保持工程处于运行中，点击'关闭活动面板后快照'，显示区显示的即为未释放对象。";
+        private string _content = "说明：\n1.打开待检测活动面板，对面板做全面交互操作。\n2.点击'打开活动面板后-记录',对内存中对象做第一次快照。\n3.关闭活动面板，但保持工程处于运行中，点击'关闭活动面板后-检查'，显示区显示的即为未释放对象。";
         private Rect _instructionPosition;
 
         private string _title;
+        private string _csharpLeakTitle = "以下是c#泄漏项：";
+        private string _luaLeakTitle = "以下是lua泄漏项：";
 
         private Dictionary<IntPtr, string> _lastLuaObjectInfo;
         private Dictionary<IntPtr, string> _currentLuaObjectInfo;
@@ -102,9 +106,11 @@ namespace com.tencent.pandora.tools
         public void OnGUI()
         {
             EditorGUILayout.BeginVertical();
+            SetCurrentWindow();
+            ShowIntroduction();
+            GUILayout.Space(_instructionHeight + _defaultPadding);
+            DrawButtons();
             InitInfoScrollViewArea();
-            DrawHeader();
-            GUILayout.Space(_headerHeight - _buttonHeight);
             DrawTitle();
             DrawSegmentingLine();
             OnMouseEvent();
@@ -159,41 +165,28 @@ namespace com.tencent.pandora.tools
 
         private void DrawHeader()
         {
-            GUILayout.BeginHorizontal();
-            ShowIntroduction();
-            GUILayout.Space(330f);
-            DrawButtons();
-            GUILayout.EndHorizontal();
+
         }
 
         private void DrawButtons()
         {
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("打开活动面板后快照", GUILayout.Height(_buttonHeight)))
+            if (GUILayout.Button("打开活动面板后-记录", GUILayout.Height(_buttonHeight)))
             {
-                _isDisplayingFirstSnap = true;
-                EditorPrefs.SetBool(_isDisplayingFirstSnapKey, true);
                 LeakDetector.Instance.GetReferenceDataWhenPanelOpened();
-                _referenceDescriptionMap = LeakDetector.Instance.ReferenceDescription;
-                FillReferenceInfo();
-                _title = "以下是lua引用的c#对象：";
             }
 
-            if (GUILayout.Button("关闭活动面板后快照", GUILayout.Height(_buttonHeight)))
+            if (GUILayout.Button("关闭活动面板后-检查", GUILayout.Height(_buttonHeight)))
             {
-                _isDisplayingFirstSnap = false;
-                EditorPrefs.SetBool(_isDisplayingFirstSnapKey, false);
                 LeakDetector.Instance.GetReferenceDataWhenPanelClosed();
                 _referenceDescriptionMap = LeakDetector.Instance.ReferenceDescription;
                 FillReferenceInfo();
-                _title = "以下是lua引用的c#对象泄漏项：";
             }
 
-            if (GUILayout.Button("清空显示", GUILayout.Width(80f), GUILayout.Height(_buttonHeight)))
+            if (GUILayout.Button("清空显示", GUILayout.Height(_buttonHeight)))
             {
                 _referenceDescriptionMap.Clear();
                 _referenceInfo.Clear();
-                _title = "";
                 _detailInfo = "";
                 Repaint();
             }
@@ -204,11 +197,11 @@ namespace com.tencent.pandora.tools
         {
             instructionStyle = new GUIStyle("flow node 0");
             instructionStyle.alignment = TextAnchor.UpperLeft;
-            instructionStyle.wordWrap = true;
+            instructionStyle.wordWrap = false;
             instructionStyle.padding = new RectOffset(10, 10, 30, 0);
             instructionStyle.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
             instructionStyle.fontSize = _detailInfoFontSize;
-            GUI.Box(_instructionPosition, _content, instructionStyle);
+            GUI.Box(new Rect(_defaultPadding, 0, _windowSize.x - 2 * _defaultPadding, _instructionHeight), _content, instructionStyle);
         }
 
         private void DrawTitle()
@@ -265,6 +258,12 @@ namespace com.tencent.pandora.tools
             {
                 _windowResize = false;
             }
+        }
+
+        private void SetCurrentWindow()
+        {
+            _windowSize.x = Screen.width;
+            _windowSize.y = Screen.height;
         }
 
         private void RefreshInfoScrollViewArea()
