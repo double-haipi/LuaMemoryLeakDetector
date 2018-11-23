@@ -91,7 +91,6 @@ namespace com.tencent.pandora.tools
             _detailInfoStyle.wordWrap = true;
             _detailInfoStyle.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
             _detailInfoStyle.fontSize = _detailInfoFontSize;
-
         }
 
         public void OnGUI()
@@ -135,11 +134,11 @@ namespace com.tencent.pandora.tools
 
             if (_segmentingLineRect2 == null)
             {
-                _segmentingLineRect2 = new Rect(0, yPostionOfSegmentLine1, Screen.width, 1f);
+                _segmentingLineRect2 = new Rect(0, yPostionOfSegmentLine2, Screen.width, 1f);
             }
             else
             {
-                _segmentingLineRect2.Set(0, yPostionOfSegmentLine1, Screen.width, 1f);
+                _segmentingLineRect2.Set(0, yPostionOfSegmentLine2, Screen.width, 1f);
             }
         }
 
@@ -155,13 +154,14 @@ namespace com.tencent.pandora.tools
             {
                 LeakDetector.Instance.GetReferenceDataWhenPanelClosed();
                 _referenceDescriptionMap = LeakDetector.Instance.ReferenceDescription;
-                FillReferenceInfo();
+                FillLeakInfoList();
             }
 
             if (GUILayout.Button("清空显示", GUILayout.Height(_buttonHeight)))
             {
                 _referenceDescriptionMap.Clear();
                 _csharpObjectLeakInfo.Clear();
+                _luaObjectLeakInfo.Clear();
                 _detailInfo = "";
                 Repaint();
             }
@@ -179,7 +179,7 @@ namespace com.tencent.pandora.tools
             GUI.Box(new Rect(_defaultPadding, 0, _windowSize.x - 2 * _defaultPadding, _instructionHeight), _content, instructionStyle);
         }
 
-        private void DrawTitle( string content )
+        private void DrawTitle(string content)
         {
             Color originalColor = _detailInfoStyle.normal.textColor;
             _detailInfoStyle.normal.textColor = new Color(0f, 1f, 0f, 1f);
@@ -187,12 +187,20 @@ namespace com.tencent.pandora.tools
             _detailInfoStyle.normal.textColor = originalColor;
         }
 
-        private void FillReferenceInfo()
+        private void FillLeakInfoList()
         {
             _csharpObjectLeakInfo.Clear();
+            _luaObjectLeakInfo.Clear();
             foreach (var item in _referenceDescriptionMap)
             {
-                _csharpObjectLeakInfo.Add(item.Value);
+                if (item.Value.Contains("C#"))
+                {
+                    _csharpObjectLeakInfo.Add(item.Value);
+                }
+                else
+                {
+                    _luaObjectLeakInfo.Add(item.Value);
+                }
             }
             Repaint();
         }
@@ -247,11 +255,12 @@ namespace com.tencent.pandora.tools
 
         private void DrawScharpArea()
         {
+            DrawTitle(_csharpLeakTitle);
             _csharpAreaScrollPosition = EditorGUILayout.BeginScrollView(_csharpAreaScrollPosition, GUILayout.Height(_csharpAreaScrollViewHeight));
             int length = _csharpObjectLeakInfo.Count;
             for (int i = 0; i < length; i++)
             {
-                DrawInfo(i, _csharpObjectLeakInfo[i].Substring(0, _csharpObjectLeakInfo[i].IndexOf("\n")));
+                DrawInfo(1, i, _csharpObjectLeakInfo[i].Substring(0, _csharpObjectLeakInfo[i].IndexOf("\n")));
             }
             GUILayout.Space(length * _infoLineHeight);
             EditorGUILayout.EndScrollView();
@@ -259,28 +268,29 @@ namespace com.tencent.pandora.tools
 
         private void DrawLuaArea()
         {
+            DrawTitle(_luaLeakTitle);
             _luaAreaScrollPosition = EditorGUILayout.BeginScrollView(_luaAreaScrollPosition, GUILayout.Height(_luaAreaScrollViewHeight));
             int length = _luaObjectLeakInfo.Count;
             for (int i = 0; i < length; i++)
             {
-                DrawInfo(i, _luaObjectLeakInfo[i].Substring(0, _luaObjectLeakInfo[i].IndexOf("\n")));
+                DrawInfo(2, i, _luaObjectLeakInfo[i].Substring(0, _luaObjectLeakInfo[i].IndexOf("\n")));
             }
             GUILayout.Space(length * _infoLineHeight);
             EditorGUILayout.EndScrollView();
         }
 
         //这个地方的绘制可能要修改
-        private void DrawInfo( int index, string message )
+        private void DrawInfo(int area, int index, string message)
         {
             Rect rect = new Rect(0, index * _infoLineHeight, Screen.width - 18f, _infoLineHeight);
-            DrawInfoBackground(index, rect);
+            DrawInfoBackground(area, index, rect);
             _briefInfoStyle = GetBriefInfoStyle("CN EntryWarn");
             GUI.Label(rect, message, _briefInfoStyle);
             //添加cursorRect
             EditorGUIUtility.AddCursorRect(rect, MouseCursor.Text);
         }
 
-        private void DrawInfoBackground( int index, Rect rect, float topPadding = 30f )
+        private void DrawInfoBackground(int area, int index, Rect rect, float topPadding = 30f)
         {
             if (_oddLineBackgroundTexture == null)
             {
@@ -296,7 +306,7 @@ namespace com.tencent.pandora.tools
                 _selectedLineBackoundTexture = CreateTexture(Vector2.one, new Color(62.0f / 255.0f, 95.0f / 255.0f, 149.0f / 255.0f, 1.0f));
             }
 
-            if (index == _selectedInfoIndex)
+            if (area == _selectedArea && index == _selectedInfoIndex)
             {
                 GUI.DrawTexture(rect, _selectedLineBackoundTexture);
             }
@@ -310,7 +320,7 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        private GUIStyle GetBriefInfoStyle( string styleName )
+        private GUIStyle GetBriefInfoStyle(string styleName)
         {
             GUIStyle style = new GUIStyle(styleName);
             style.alignment = TextAnchor.UpperLeft;
@@ -413,7 +423,7 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        private int GetSelectedIndex( float min, float max, float increase, Vector2 mousePosition )
+        private int GetSelectedIndex(float min, float max, float increase, Vector2 mousePosition)
         {
             int index = -1;
             Rect currentRect;
@@ -429,7 +439,7 @@ namespace com.tencent.pandora.tools
             return -1;
         }
 
-        private Texture2D CreateTexture( Vector2 size, Color color )
+        private Texture2D CreateTexture(Vector2 size, Color color)
         {
             Texture2D tex = new Texture2D((int)size.x, (int)size.y);
             tex.hideFlags = HideFlags.DontSave;
@@ -443,6 +453,15 @@ namespace com.tencent.pandora.tools
             tex.Apply();
             tex.filterMode = FilterMode.Point;
             return tex;
+        }
+
+        private void InitTestData()
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                _csharpObjectLeakInfo.Add("[csharp] xxx " + i + "\ndetail:");
+                _luaObjectLeakInfo.Add("[lua]xxx " + i + "\ndetail:");
+            }
         }
     }
 }
