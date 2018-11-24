@@ -11,9 +11,10 @@ namespace com.tencent.pandora.tools
     public class LeakDetector
     {
         private static LeakDetector _instance;
-        private Dictionary<int, string> _referenceDescriptionMap = new Dictionary<int, string>();
-        private Dictionary<object, int> _referenceDataWhenPanelOpened;
-        private Dictionary<object, int> _referenceDataWhenPanelClosed;
+        private Dictionary<object, int> _objectMapWhenPanelOpened;
+        private Dictionary<object, int> _objectMapWhenPanelClosed;
+        private Dictionary<int, string> _targetObjectsDescription = new Dictionary<int, string>();
+        private List<string> _leakInfo = new List<string>();
 
         public static LeakDetector Instance
         {
@@ -27,72 +28,59 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        public Dictionary<int, string> ReferenceDescription
+        public List<string> LeakInfo
         {
             get
             {
-                return _referenceDescriptionMap;
+                return _leakInfo;
             }
         }
 
-        public Dictionary<object, int> GetReferenceDataWhenPanelOpened()
+        public void RecordWhenPanelOpened()
         {
-            if (Application.isPlaying == false)
-            {
-                DisplayWarningDialog("游戏工程没有运行，请运行后操作！");
-                return null;
-            }
-            _referenceDataWhenPanelOpened = GetReferenceData();
-            SetReferenceDescription(_referenceDataWhenPanelOpened, ref _referenceDescriptionMap);
-            return _referenceDataWhenPanelOpened;
+            _objectMapWhenPanelOpened = GetObjMap();
+            SetOjectDescription();
         }
 
-        public Dictionary<object, int> GetReferenceDataWhenPanelClosed()
+        public void CheckLeakWhenPanelClosed()
         {
-            if (Application.isPlaying == false)
+
+            if (_objectMapWhenPanelOpened == null)
             {
-                DisplayWarningDialog("游戏工程已结束运行，请在运行时操作！");
-                return null;
+                DisplayWarningDialog("请先执行'打开活动面板后-记录',再做此操作");
+                return;
             }
-            //先调用lua gc
             LuaGC();
-            _referenceDataWhenPanelClosed = GetReferenceData();
-            //更新_referenceDescriptionMap，只保留未被释放的。
-            UpdateReferenceDescription(_referenceDataWhenPanelClosed, ref _referenceDescriptionMap);
-            return _referenceDataWhenPanelClosed;
+            _objectMapWhenPanelClosed = GetObjMap();
+            SetLeakInfo();
         }
 
-        private Dictionary<object, int> GetReferenceData()
+        private Dictionary<object, int> GetObjMap()
         {
-            object luaStatePointer = GetLuaStatePointer();
-            if (luaStatePointer == null)
+            IntPtr luaStatePointer = GetLuaStatePointer();
+            if (luaStatePointer == IntPtr.Zero)
             {
-                return new Dictionary<object, int>();
+                return null;
             }
+            ObjectCache objectCache = ObjectCache.get(luaStatePointer);
             Type objectCacheType = FindType("com.tencent.pandora.ObjectCache");
-            MethodInfo objectCacheGetInfo = objectCacheType.GetMethod("get", BindingFlags.Public | BindingFlags.Static);
-            object objectCache = objectCacheGetInfo.Invoke(null, new object[] { luaStatePointer });
-
-            FieldInfo objMapInfo = objectCacheType.GetField("objMap", BindingFlags.NonPublic | BindingFlags.Instance);
-            Dictionary<object, int> objMap = objMapInfo.GetValue(objectCache) as Dictionary<object, int>;
-
+            FieldInfo objMapField = objectCacheType.GetField("objMap", BindingFlags.NonPublic | BindingFlags.Instance);
+            Dictionary<object, int> objMap = objMapField.GetValue(objectCache) as Dictionary<object, int>;
             return objMap;
         }
 
-        private object GetLuaStatePointer()
+        private IntPtr GetLuaStatePointer()
         {
-            Type luaStateType = FindType("com.tencent.pandora.LuaState");
-            object luaState = luaStateType.GetField("main").GetValue(null);
-            if (luaState == null)
+            GameObject sluaSvrGameObject = GameObject.Find("LuaStateProxy_0");
+            if (sluaSvrGameObject == null)
             {
-                return null;
+                DisplayWarningDialog("lua 虚拟机未在运行中，请运行游戏工程后做此操作！");
+                return IntPtr.Zero;
             }
-            PropertyInfo pointerPropertyInfo = luaStateType.GetProperty("L", BindingFlags.Public | BindingFlags.Instance);
-            object luaStatePointer = pointerPropertyInfo.GetValue(luaState, null);
-            return luaStatePointer;
+            return sluaSvrGameObject.GetComponent<LuaSvrGameObject>().state.L;
         }
 
-        private Type FindType(string typeName)
+        private Type FindType( string typeName )
         {
             Type type = Type.GetType(typeName);
 
@@ -116,16 +104,16 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        private void SetReferenceDescription(Dictionary<object, int> referenceData, ref Dictionary<int, string> referenceDescriptionMap)
+        private void SetOjectDescription()
         {
-            referenceDescriptionMap.Clear();
+            _targetObjectsDescription.Clear();
             GameObject go = null;
             Component component = null;
             LuaSentry sentry = null;
             string description = "";
             try
             {
-                foreach (var item in referenceData)
+                foreach (var item in _objectMapWhenPanelOpened)
                 {
                     description = "";
                     if (item.Key == null)
@@ -151,43 +139,43 @@ namespace com.tencent.pandora.tools
                     if (string.IsNullOrEmpty(description) == false)
                     {
 
-                        referenceDescriptionMap[item.Value] = description;
+                        _targetObjectsDescription[item.Value] = description;
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                Debug.LogWarning("活动面板已关闭，此按钮不能点击");
+                //当C#层的GameObject/Component 对象被销毁,而lua层未释放对它的引用时,点击'打开活动面板后-记录'按钮会触发此异常.
+                //请在正确的时机点击'打开活动面板后-记录'按钮,以记录正确的C# 对象信息
+                Debug.LogWarning(e.Message + "\nStackTrace:\n" + e.StackTrace);
             }
         }
 
         private void LuaGC()
         {
-            object luaStatePointer = GetLuaStatePointer();
-            if (luaStatePointer == null)
+            IntPtr luaStatePointer = GetLuaStatePointer();
+            if (luaStatePointer == IntPtr.Zero)
             {
                 return;
             }
             LuaDLL.pua_gc((IntPtr)luaStatePointer, LuaGCOptions.LUA_GCCOLLECT, 0);
         }
 
-        private void UpdateReferenceDescription(Dictionary<object, int> referenceData, ref Dictionary<int, string> referenceDescriptionMap)
+        private void SetLeakInfo()
         {
-            Dictionary<int, string> newMap = new Dictionary<int, string>();
+            _leakInfo.Clear();
             string description = "";
-            foreach (var item in referenceData)
+            foreach (var item in _objectMapWhenPanelClosed)
             {
-                if (referenceDescriptionMap.TryGetValue(item.Value, out description))
+                if (_targetObjectsDescription.TryGetValue(item.Value, out description))
                 {
-                    newMap[item.Value] = description;
+                    _leakInfo.Add(description);
                 }
             }
-            referenceDescriptionMap = newMap;
         }
 
-
         //path 是相对于活动面板的，把UI Root，Canvas 头去掉。
-        private string GetTransformPath(Transform trans)
+        private string GetTransformPath( Transform trans )
         {
             if (trans == null)
             {
@@ -226,7 +214,7 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        public static void DisplayWarningDialog(string message, string title = "")
+        public static void DisplayWarningDialog( string message, string title = "" )
         {
             EditorUtility.DisplayDialog(title, message, "我知道了");
         }

@@ -48,7 +48,7 @@ namespace com.tencent.pandora.tools
         private Texture2D _evenLineBackgroundTexture;
         private Texture2D _selectedLineBackoundTexture;
 
-        private Dictionary<int, string> _referenceDescriptionMap = new Dictionary<int, string>();
+        private List<string> _totalLeakInfo = new List<string>();
         private List<string> _csharpObjectLeakInfo = new List<string>();
         private List<string> _luaObjectLeakInfo = new List<string>();
 
@@ -140,19 +140,19 @@ namespace com.tencent.pandora.tools
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("打开活动面板后-记录", GUILayout.Height(_buttonHeight)))
             {
-                LeakDetector.Instance.GetReferenceDataWhenPanelOpened();
+                LeakDetector.Instance.RecordWhenPanelOpened();
             }
 
             if (GUILayout.Button("关闭活动面板后-检查", GUILayout.Height(_buttonHeight)))
             {
-                LeakDetector.Instance.GetReferenceDataWhenPanelClosed();
-                _referenceDescriptionMap = LeakDetector.Instance.ReferenceDescription;
-                FillLeakInfoList();
+                LeakDetector.Instance.CheckLeakWhenPanelClosed();
+                _totalLeakInfo = LeakDetector.Instance.LeakInfo;
+                SeperateLeakInfo();
             }
 
             if (GUILayout.Button("清空显示", GUILayout.Height(_buttonHeight)))
             {
-                _referenceDescriptionMap.Clear();
+                _totalLeakInfo.Clear();
                 _csharpObjectLeakInfo.Clear();
                 _luaObjectLeakInfo.Clear();
                 _detailInfo = "";
@@ -161,19 +161,19 @@ namespace com.tencent.pandora.tools
             GUILayout.EndHorizontal();
         }
 
-        private void FillLeakInfoList()
+        private void SeperateLeakInfo()
         {
             _csharpObjectLeakInfo.Clear();
             _luaObjectLeakInfo.Clear();
-            foreach (var item in _referenceDescriptionMap)
+            foreach (var item in _totalLeakInfo)
             {
-                if (item.Value.Contains("C#"))
+                if (item.Contains("C#"))
                 {
-                    _csharpObjectLeakInfo.Add(item.Value);
+                    _csharpObjectLeakInfo.Add(item);
                 }
                 else
                 {
-                    _luaObjectLeakInfo.Add(item.Value);
+                    _luaObjectLeakInfo.Add(item);
                 }
             }
             Repaint();
@@ -227,10 +227,11 @@ namespace com.tencent.pandora.tools
         {
             Rect rect = new Rect(0, index * _infoLineHeight, Screen.width - 18f, _infoLineHeight);
             DrawInfoBackground(area, index, rect);
-            if (_briefInfoStyle == null)
+            if (_briefInfoStyle == null || _briefInfoStyle.name != "CN EntryWarn")
             {
                 SetBriefInfoStyle();
             }
+            //SetBriefInfoStyle();
             GUI.Label(rect, message, _briefInfoStyle);
             //添加cursorRect
             EditorGUIUtility.AddCursorRect(rect, MouseCursor.Text);
