@@ -45,7 +45,7 @@ namespace com.tencent.pandora.tools
         public void CheckLeakWhenPanelClosed()
         {
 
-            if (_objectMapWhenPanelOpened.Count == 0)
+            if (_objectMapWhenPanelOpened == null || _objectMapWhenPanelOpened.Count == 0)
             {
                 DisplayWarningDialog("请先执行'打开活动面板后-记录',再做此操作");
                 return;
@@ -64,7 +64,7 @@ namespace com.tencent.pandora.tools
                 return new Dictionary<object, int>();
             }
             ObjectCache objectCache = ObjectCache.get(luaStatePointer);
-            Type objectCacheType = Type.GetType("com.tencent.pandora.ObjectCache");
+            Type objectCacheType = FindType("com.tencent.pandora.ObjectCache");
             FieldInfo objMapField = objectCacheType.GetField("objMap", BindingFlags.NonPublic | BindingFlags.Instance);
             Dictionary<object, int> objMap = objMapField.GetValue(objectCache) as Dictionary<object, int>;
             return objMap;
@@ -193,7 +193,21 @@ namespace com.tencent.pandora.tools
                 return path;
             }
         }
-
+        private Type FindType(string typeName)
+        {
+            Type type;
+            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            for (int i = 0; i < assemblies.Length; i++)
+            {
+                Assembly assembly = assemblies[i];
+                type = assembly.GetType(typeName);
+                if (type != null)
+                {
+                    return type;
+                }
+            }
+            return null;
+        }
         public static void DisplayWarningDialog(string message, string title = "")
         {
             EditorUtility.DisplayDialog(title, message, "我知道了");
