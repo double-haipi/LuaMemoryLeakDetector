@@ -10,11 +10,11 @@ namespace com.tencent.pandora.tools
     public class LeakDetectorWindow : EditorWindow
     {
         #region 参数
-        private int _instructionHeight = 80;
-        private int _defaultPadding = 4;
-        private int _buttonHeight = 30;
-        private int _titleHeight = 20;
-        private int _infoLineHeight = 30;
+        private const int INSTRUCTION_HEIGHT = 80;
+        private const int DEFAULT_PADDING = 4;
+        private const int BUTTON_HEIGHT = 30;
+        private const int TITLE_HEIGHT = 20;
+        private const int INFO_LINE_HEIGHT = 30;
 
         private Vector2 _windowSize = Vector2.zero;
         private bool _windowResize = false;
@@ -33,9 +33,9 @@ namespace com.tencent.pandora.tools
 
         GUIStyle instructionStyle;
         private GUIStyle _briefInfoStyle;
-        private int _briefInfoFontSize = 12;
+        private const int BRIEF_INFO_FONT_SIZE = 12;
         private GUIStyle _detailInfoStyle;
-        private int _detailInfoFontSize = 12;
+        private const int DETAIL_INFO_FONT_SIZE = 12;
         private string _detailInfo = "";
 
         private Rect _segmentLineRect1 = new Rect();
@@ -48,20 +48,31 @@ namespace com.tencent.pandora.tools
         private Texture2D _evenLineBackgroundTexture;
         private Texture2D _selectedLineBackoundTexture;
 
-        private List<string> _totalLeakInfo = new List<string>();
-        private List<string> _csharpObjectLeakInfo = new List<string>();
-        private List<string> _luaObjectLeakInfo = new List<string>();
+        private List<string> _totalLeakInfoList = new List<string>();
+        private List<string> _csharpObjectLeakInfoList = new List<string>();
+        private List<string> _luaObjectLeakInfoList = new List<string>();
 
-        private string _instruction = "说明：\n1.打开待检测活动面板，对面板做全面交互操作。\n2.点击'打开活动面板后-记录',对内存中对象做第一次快照。\n3.关闭活动面板，但保持工程处于运行中，点击'关闭活动面板后-检查'，显示区显示的即为未释放对象。";
-
-        private string _csharpLeakTitle = "以下是c#泄漏项：";
-        private string _luaLeakTitle = "以下是lua泄漏项：";
+        private const string INSTRUCTION = "说明：\n1.打开待检测活动面板，对面板做全面交互操作。\n2.点击'打开活动面板后-记录',对内存中对象做第一次快照。\n3.关闭活动面板，但保持工程处于运行中，点击'关闭活动面板后-检查'，显示区显示的即为未释放对象。";
+        private const string CSHARP_LEAK_TITLE = "以下是c#泄漏项：";
+        private const string LUA_LEAK_TITLE = "以下是lua泄漏项：";
         #endregion
 
-        [MenuItem("PandoraTools/ActionMemoryLeakDetector")]
+        [MenuItem("PandoraTools/MemoryLeakDetector")]
         public static void ShowWindow()
         {
             GetWindow<LeakDetectorWindow>(false, "LeakDetector", true);
+        }
+
+        private void OnEnable()
+        {
+            InitTextures();
+        }
+        private void InitTextures()
+        {
+            _oddLineBackgroundTexture = CreateTexture(Vector2.one, new Color(0.15f, 0.15f, 0.15f, 0.5f));
+            _evenLineBackgroundTexture = CreateTexture(Vector2.one, new Color(0.2f, 0.2f, 0.2f, 0.5f));
+            _selectedLineBackoundTexture = CreateTexture(Vector2.one, new Color(62.0f / 255.0f, 95.0f / 255.0f, 149.0f / 255.0f, 1.0f));
+            _segmentingLineTexture = CreateTexture(Vector2.one, Color.black);
         }
 
         private void OnGUI()
@@ -69,8 +80,8 @@ namespace com.tencent.pandora.tools
             EditorGUILayout.BeginVertical();
             RefreshWindowSize();
             RefreshScrollViewArea();
-            ShowIntroduction();
-            GUILayout.Space(_instructionHeight + _defaultPadding);
+            ShowInstruction();
+            GUILayout.Space(INSTRUCTION_HEIGHT + DEFAULT_PADDING);
             DrawButtons();
             DrawScharpArea();
             DrawSegmentingLine();
@@ -104,11 +115,11 @@ namespace com.tencent.pandora.tools
 
         private void SetScrollViewArea()
         {
-            float usedSpace = _instructionHeight + _buttonHeight + _defaultPadding;
+            float usedSpace = INSTRUCTION_HEIGHT + BUTTON_HEIGHT + DEFAULT_PADDING;
             float remainedSpace = _windowSize.y - usedSpace;
             float oneFifthSpace = remainedSpace / 5.0f;
 
-            _csharpAreaScrollViewHeight = oneFifthSpace * 2.0f - _titleHeight;
+            _csharpAreaScrollViewHeight = oneFifthSpace * 2.0f - TITLE_HEIGHT;
             _luaAreaScrollViewHeight = _csharpAreaScrollViewHeight;
             _detailAreaScrollViewHeight = oneFifthSpace;
 
@@ -117,13 +128,13 @@ namespace com.tencent.pandora.tools
             _segmentLineRect1.Set(0, yPostionOfSegmentLine1, Screen.width, 1f);
             _segmentLineRect2.Set(0, yPostionOfSegmentLine2, Screen.width, 1f);
         }
-        private void ShowIntroduction()
+        private void ShowInstruction()
         {
             if (instructionStyle == null)
             {
                 SetInstructionStyle();
             }
-            GUI.Box(new Rect(_defaultPadding, 0, _windowSize.x - 2 * _defaultPadding, _instructionHeight), _instruction, instructionStyle);
+            GUI.Box(new Rect(DEFAULT_PADDING, 0, _windowSize.x - 2 * DEFAULT_PADDING, INSTRUCTION_HEIGHT), INSTRUCTION, instructionStyle);
         }
         private void SetInstructionStyle()
         {
@@ -132,29 +143,29 @@ namespace com.tencent.pandora.tools
             instructionStyle.wordWrap = false;
             instructionStyle.padding = new RectOffset(10, 10, 30, 0);
             instructionStyle.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
-            instructionStyle.fontSize = _detailInfoFontSize;
+            instructionStyle.fontSize = DETAIL_INFO_FONT_SIZE;
         }
 
         private void DrawButtons()
         {
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("打开活动面板后-记录", GUILayout.Height(_buttonHeight)))
+            if (GUILayout.Button("打开活动面板后-记录", GUILayout.Height(BUTTON_HEIGHT)))
             {
                 LeakDetector.Instance.RecordWhenPanelOpened();
             }
 
-            if (GUILayout.Button("关闭活动面板后-检查", GUILayout.Height(_buttonHeight)))
+            if (GUILayout.Button("关闭活动面板后-检查", GUILayout.Height(BUTTON_HEIGHT)))
             {
                 LeakDetector.Instance.CheckLeakWhenPanelClosed();
-                _totalLeakInfo = LeakDetector.Instance.LeakInfo;
+                _totalLeakInfoList = LeakDetector.Instance.LeakInfoList;
                 SeperateLeakInfo();
             }
 
-            if (GUILayout.Button("清空显示", GUILayout.Height(_buttonHeight)))
+            if (GUILayout.Button("清空显示", GUILayout.Height(BUTTON_HEIGHT)))
             {
-                _totalLeakInfo.Clear();
-                _csharpObjectLeakInfo.Clear();
-                _luaObjectLeakInfo.Clear();
+                _totalLeakInfoList.Clear();
+                _csharpObjectLeakInfoList.Clear();
+                _luaObjectLeakInfoList.Clear();
                 _detailInfo = "";
                 Repaint();
             }
@@ -163,17 +174,17 @@ namespace com.tencent.pandora.tools
 
         private void SeperateLeakInfo()
         {
-            _csharpObjectLeakInfo.Clear();
-            _luaObjectLeakInfo.Clear();
-            foreach (var item in _totalLeakInfo)
+            _csharpObjectLeakInfoList.Clear();
+            _luaObjectLeakInfoList.Clear();
+            foreach (var item in _totalLeakInfoList)
             {
                 if (item.Contains("C#"))
                 {
-                    _csharpObjectLeakInfo.Add(item);
+                    _csharpObjectLeakInfoList.Add(item);
                 }
                 else
                 {
-                    _luaObjectLeakInfo.Add(item);
+                    _luaObjectLeakInfoList.Add(item);
                 }
             }
             Repaint();
@@ -181,15 +192,15 @@ namespace com.tencent.pandora.tools
 
         private void DrawScharpArea()
         {
-            DrawBriefInfoArea(_csharpLeakTitle, ref _csharpAreaScrollPosition, _csharpAreaScrollViewHeight, _csharpObjectLeakInfo, 1);
+            DrawBriefInfoArea(CSHARP_LEAK_TITLE, ref _csharpAreaScrollPosition, _csharpAreaScrollViewHeight, _csharpObjectLeakInfoList, 1);
         }
 
         private void DrawLuaArea()
         {
-            DrawBriefInfoArea(_luaLeakTitle, ref _luaAreaScrollPosition, _luaAreaScrollViewHeight, _luaObjectLeakInfo, 2);
+            DrawBriefInfoArea(LUA_LEAK_TITLE, ref _luaAreaScrollPosition, _luaAreaScrollViewHeight, _luaObjectLeakInfoList, 2);
         }
 
-        private void DrawBriefInfoArea( string title, ref Vector2 scrollPosition, float viewHeight, List<string> infoList, int area )
+        private void DrawBriefInfoArea(string title, ref Vector2 scrollPosition, float viewHeight, List<string> infoList, int area)
         {
             DrawTitle(title);
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(viewHeight));
@@ -198,11 +209,11 @@ namespace com.tencent.pandora.tools
             {
                 DrawInfo(area, i, infoList[i].Substring(0, infoList[i].IndexOf("\n")));
             }
-            GUILayout.Space(length * _infoLineHeight);
+            GUILayout.Space(length * INFO_LINE_HEIGHT);
             EditorGUILayout.EndScrollView();
         }
 
-        private void DrawTitle( string content )
+        private void DrawTitle(string content)
         {
             if (_detailInfoStyle == null)
             {
@@ -210,7 +221,7 @@ namespace com.tencent.pandora.tools
             }
             Color originalColor = _detailInfoStyle.normal.textColor;
             _detailInfoStyle.normal.textColor = new Color(0f, 1f, 0f, 1f);
-            GUILayout.Label(content, _detailInfoStyle, GUILayout.Height(_titleHeight));
+            GUILayout.Label(content, _detailInfoStyle, GUILayout.Height(TITLE_HEIGHT));
             _detailInfoStyle.normal.textColor = originalColor;
         }
         private void SetDetailInfoStyle()
@@ -220,18 +231,18 @@ namespace com.tencent.pandora.tools
             _detailInfoStyle.padding = new RectOffset(2, 2, 2, 2);
             _detailInfoStyle.wordWrap = true;
             _detailInfoStyle.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
-            _detailInfoStyle.fontSize = _detailInfoFontSize;
+            _detailInfoStyle.fontSize = DETAIL_INFO_FONT_SIZE;
         }
 
-        private void DrawInfo( int area, int index, string message )
+        private void DrawInfo(int area, int index, string message)
         {
-            Rect rect = new Rect(0, index * _infoLineHeight, Screen.width - 18f, _infoLineHeight);
+            Rect rect = new Rect(0, index * INFO_LINE_HEIGHT, Screen.width - 18f, INFO_LINE_HEIGHT);
             DrawInfoBackground(area, index, rect);
+            //使用内置的GUIStyle，初始化必须放在OnGUI内调用，不能放在OnEnable中，否则会报错。
             if (_briefInfoStyle == null || _briefInfoStyle.name != "CN EntryWarn")
             {
                 SetBriefInfoStyle();
             }
-            //SetBriefInfoStyle();
             GUI.Label(rect, message, _briefInfoStyle);
             //添加cursorRect
             EditorGUIUtility.AddCursorRect(rect, MouseCursor.Text);
@@ -242,25 +253,11 @@ namespace com.tencent.pandora.tools
             _briefInfoStyle.alignment = TextAnchor.UpperLeft;
             _briefInfoStyle.clipping = TextClipping.Clip;
             _briefInfoStyle.normal.textColor = new Color(1f, 1f, 1f, 0.5f);
-            _briefInfoStyle.fontSize = _briefInfoFontSize;
+            _briefInfoStyle.fontSize = BRIEF_INFO_FONT_SIZE;
         }
 
-        private void DrawInfoBackground( int area, int index, Rect rect, float topPadding = 30f )
+        private void DrawInfoBackground(int area, int index, Rect rect, float topPadding = 30f)
         {
-            if (_oddLineBackgroundTexture == null)
-            {
-                _oddLineBackgroundTexture = CreateTexture(Vector2.one, new Color(0.15f, 0.15f, 0.15f, 0.5f));
-            }
-            if (_evenLineBackgroundTexture == null)
-            {
-                _evenLineBackgroundTexture = CreateTexture(Vector2.one, new Color(0.2f, 0.2f, 0.2f, 0.5f));
-
-            }
-            if (_selectedLineBackoundTexture == null)
-            {
-                _selectedLineBackoundTexture = CreateTexture(Vector2.one, new Color(62.0f / 255.0f, 95.0f / 255.0f, 149.0f / 255.0f, 1.0f));
-            }
-
             if (area == _selectedArea && index == _selectedInfoIndex)
             {
                 GUI.DrawTexture(rect, _selectedLineBackoundTexture);
@@ -277,15 +274,10 @@ namespace com.tencent.pandora.tools
 
         private void DrawSegmentingLine()
         {
-            if (_segmentingLineTexture == null)
-            {
-                _segmentingLineTexture = CreateTexture(Vector2.one, Color.black);
-            }
-
             GUI.DrawTexture(_segmentLineRect1, _segmentingLineTexture);
             GUI.DrawTexture(_segmentLineRect2, _segmentingLineTexture);
         }
-        private Texture2D CreateTexture( Vector2 size, Color color )
+        private Texture2D CreateTexture(Vector2 size, Color color)
         {
             Texture2D tex = new Texture2D((int)size.x, (int)size.y);
             tex.hideFlags = HideFlags.DontSave;
@@ -311,17 +303,16 @@ namespace com.tencent.pandora.tools
 
             if (_selectedArea == 1)
             {
-                if (-1 < _selectedInfoIndex && _selectedInfoIndex < _csharpObjectLeakInfo.Count)
+                if (-1 < _selectedInfoIndex && _selectedInfoIndex < _csharpObjectLeakInfoList.Count)
                 {
-                    _detailInfo = _csharpObjectLeakInfo[_selectedInfoIndex];
+                    _detailInfo = _csharpObjectLeakInfoList[_selectedInfoIndex];
                 }
             }
-
-            if (_selectedArea == 2)
+            else if (_selectedArea == 2)
             {
-                if (-1 < _selectedInfoIndex && _selectedInfoIndex < _luaObjectLeakInfo.Count)
+                if (-1 < _selectedInfoIndex && _selectedInfoIndex < _luaObjectLeakInfoList.Count)
                 {
-                    _detailInfo = _luaObjectLeakInfo[_selectedInfoIndex];
+                    _detailInfo = _luaObjectLeakInfoList[_selectedInfoIndex];
                 }
             }
 
@@ -339,7 +330,7 @@ namespace com.tencent.pandora.tools
 
         private void OnInfoClick()
         {
-            CalcuteSelectedTabAndIndex();
+            CalculateSelectedAreaAndIndex();
             if (_newSelectedArea == -1 || _newSelectedInfoIndex == -1)
             {
                 return;
@@ -356,7 +347,7 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        private void CalcuteSelectedTabAndIndex()
+        private void CalculateSelectedAreaAndIndex()
         {
             if (Event.current.type != EventType.MouseUp)
             {
@@ -371,8 +362,8 @@ namespace com.tencent.pandora.tools
             float csharpAreaMaxHeight = yPostionOfSegmentLine1 + _csharpAreaScrollPosition.y;
             float luaAreaMaxHeight = yPostionOfSegmentLine2 + _luaAreaScrollPosition.y;
 
-            float headSpaceForCsharpArea = _instructionHeight + _buttonHeight + _defaultPadding + _titleHeight;
-            float headSpaceForLuaArea = yPostionOfSegmentLine1 + _titleHeight;
+            float headSpaceForCsharpArea = INSTRUCTION_HEIGHT + BUTTON_HEIGHT + DEFAULT_PADDING + TITLE_HEIGHT;
+            float headSpaceForLuaArea = yPostionOfSegmentLine1 + TITLE_HEIGHT;
 
             if (originalMousePosition.y <= headSpaceForCsharpArea)
             {
@@ -382,12 +373,12 @@ namespace com.tencent.pandora.tools
             else if (originalMousePosition.y <= yPostionOfSegmentLine1)
             {
                 _newSelectedArea = 1;
-                _newSelectedInfoIndex = GetSelectedIndex(headSpaceForCsharpArea, csharpAreaMaxHeight, _infoLineHeight, currentMousePositionInCsharpArea);
+                _newSelectedInfoIndex = GetSelectedIndex(headSpaceForCsharpArea, csharpAreaMaxHeight, INFO_LINE_HEIGHT, currentMousePositionInCsharpArea);
             }
             else if (originalMousePosition.y <= yPostionOfSegmentLine2)
             {
                 _newSelectedArea = 2;
-                _newSelectedInfoIndex = GetSelectedIndex(headSpaceForLuaArea, luaAreaMaxHeight, _infoLineHeight, currentMousePositionInLuaArea);
+                _newSelectedInfoIndex = GetSelectedIndex(headSpaceForLuaArea, luaAreaMaxHeight, INFO_LINE_HEIGHT, currentMousePositionInLuaArea);
             }
             else
             {
@@ -396,7 +387,7 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        private int GetSelectedIndex( float min, float max, float increase, Vector2 mousePosition )
+        private int GetSelectedIndex(float min, float max, float increase, Vector2 mousePosition)
         {
             int index = -1;
             Rect currentRect;

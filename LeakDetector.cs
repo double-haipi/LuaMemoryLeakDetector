@@ -13,8 +13,8 @@ namespace com.tencent.pandora.tools
         private static LeakDetector _instance;
         private Dictionary<object, int> _objectMapWhenPanelOpened;
         private Dictionary<object, int> _objectMapWhenPanelClosed;
-        private Dictionary<int, string> _targetObjectsDescription = new Dictionary<int, string>();
-        private List<string> _leakInfo = new List<string>();
+        private Dictionary<int, string> _targetObjectsDescriptionMap = new Dictionary<int, string>();
+        private List<string> _leakInfoList = new List<string>();
 
         public static LeakDetector Instance
         {
@@ -28,31 +28,32 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        public List<string> LeakInfo
+        public List<string> LeakInfoList
         {
             get
             {
-                return _leakInfo;
+                return _leakInfoList;
             }
         }
 
         public void RecordWhenPanelOpened()
         {
             _objectMapWhenPanelOpened = GetObjMap();
-            SetOjectDescription();
+            FillTargetOjectsDescriptionDict();
         }
 
         public void CheckLeakWhenPanelClosed()
         {
 
-            if (_objectMapWhenPanelOpened == null)
+            if (_objectMapWhenPanelOpened.Count == 0)
             {
                 DisplayWarningDialog("请先执行'打开活动面板后-记录',再做此操作");
                 return;
             }
             LuaGC();
+            UnityEngine.Resources.UnloadUnusedAssets();
             _objectMapWhenPanelClosed = GetObjMap();
-            SetLeakInfo();
+            CheckLeak();
         }
 
         private Dictionary<object, int> GetObjMap()
@@ -60,10 +61,10 @@ namespace com.tencent.pandora.tools
             IntPtr luaStatePointer = GetLuaStatePointer();
             if (luaStatePointer == IntPtr.Zero)
             {
-                return null;
+                return new Dictionary<object, int>();
             }
             ObjectCache objectCache = ObjectCache.get(luaStatePointer);
-            Type objectCacheType = FindType("com.tencent.pandora.ObjectCache");
+            Type objectCacheType = Type.GetType("com.tencent.pandora.ObjectCache");
             FieldInfo objMapField = objectCacheType.GetField("objMap", BindingFlags.NonPublic | BindingFlags.Instance);
             Dictionary<object, int> objMap = objMapField.GetValue(objectCache) as Dictionary<object, int>;
             return objMap;
@@ -80,33 +81,9 @@ namespace com.tencent.pandora.tools
             return sluaSvrGameObject.GetComponent<LuaSvrGameObject>().state.L;
         }
 
-        private Type FindType( string typeName )
+        private void FillTargetOjectsDescriptionDict()
         {
-            Type type = Type.GetType(typeName);
-
-            if (type != null)
-            {
-                return type;
-            }
-            else
-            {
-                Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
-                for (int i = 0; i < assemblies.Length; i++)
-                {
-                    Assembly assembly = assemblies[i];
-                    type = assembly.GetType(typeName);
-                    if (type != null)
-                    {
-                        return type;
-                    }
-                }
-                return null;
-            }
-        }
-
-        private void SetOjectDescription()
-        {
-            _targetObjectsDescription.Clear();
+            _targetObjectsDescriptionMap.Clear();
             GameObject go = null;
             Component component = null;
             LuaSentry sentry = null;
@@ -139,7 +116,7 @@ namespace com.tencent.pandora.tools
                     if (string.IsNullOrEmpty(description) == false)
                     {
 
-                        _targetObjectsDescription[item.Value] = description;
+                        _targetObjectsDescriptionMap[item.Value] = description;
                     }
                 }
             }
@@ -159,23 +136,26 @@ namespace com.tencent.pandora.tools
                 return;
             }
             LuaDLL.pua_gc((IntPtr)luaStatePointer, LuaGCOptions.LUA_GCCOLLECT, 0);
+
         }
 
-        private void SetLeakInfo()
+        //一般情况下，关闭面板后，objMap中还存在GameObject，Component，LuaSentry类型的对象，就是泄漏的对象
+        //泄漏对象的描述信息在_targetObjectsDescriptionMap中查询
+        private void CheckLeak()
         {
-            _leakInfo.Clear();
+            _leakInfoList.Clear();
             string description = "";
             foreach (var item in _objectMapWhenPanelClosed)
             {
-                if (_targetObjectsDescription.TryGetValue(item.Value, out description))
+                if (_targetObjectsDescriptionMap.TryGetValue(item.Value, out description))
                 {
-                    _leakInfo.Add(description);
+                    _leakInfoList.Add(description);
                 }
             }
         }
 
         //path 是相对于活动面板的，把UI Root，Canvas 头去掉。
-        private string GetTransformPath( Transform trans )
+        private string GetTransformPath(Transform trans)
         {
             if (trans == null)
             {
@@ -214,7 +194,7 @@ namespace com.tencent.pandora.tools
             }
         }
 
-        public static void DisplayWarningDialog( string message, string title = "" )
+        public static void DisplayWarningDialog(string message, string title = "")
         {
             EditorUtility.DisplayDialog(title, message, "我知道了");
         }
