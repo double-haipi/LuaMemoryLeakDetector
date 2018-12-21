@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEditor;
 using System;
 using System.Collections;
@@ -54,6 +54,16 @@ namespace com.tencent.pandora.tools
             UnityEngine.Resources.UnloadUnusedAssets();
             _objectMapWhenPanelClosed = GetObjMap();
             CheckLeak();
+        }
+
+        //打印ObjectMap
+        private void PrintObjectMap(Dictionary<object, int> map, string title)
+        {
+            Logger.LogWarning(title);
+            foreach (var item in map)
+            {
+                Logger.LogWarning(string.Format("key:{0},value:{1}", item.Key, item.Value));
+            }
         }
 
         private Dictionary<object, int> GetObjMap()
